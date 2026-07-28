@@ -8,7 +8,7 @@ A digital freight marketplace connecting **Freight Owners** (organisations with 
 
 | Path | Language | Role |
 |---|---|---|
-| [`backend/`](backend/) | Java 17 · Spring Boot · Maven | The **orchestrator** — fronts the public API, owns persistence, and calls out to matching |
+| [`backend/`](backend/) | Java 21 · Spring Boot · Maven | The **orchestrator** — fronts the public API, owns persistence, and calls out to matching |
 | [`matching-service/`](matching-service/) | Python 3.11+ · FastAPI | Rule-based matching: given a load and candidate trucks, returns eligible matches with reasons |
 
 Other documents refer to the Java service as *"the orchestrator"* — that is its **role**; `backend/` is its **path**.
@@ -29,8 +29,10 @@ Verify it is alive:
 
 ```bash
 curl http://localhost:8080/
-# {"service":"backend","status":"ok","message":"Hello from TAMP backend"}
+# {"status":"ok","message":"Hello from TAMP backend","service":"backend"}
 ```
+
+Key order is not guaranteed — the response is built from `Map.of`, which is unordered. Match on keys, not on the literal string.
 
 ### Matching service (Python)
 
@@ -39,8 +41,8 @@ cd matching-service
 python -m venv .venv
 source .venv/Scripts/activate     # Windows (Git Bash);  macOS/Linux: source .venv/bin/activate
 pip install -e ".[dev]"
-uvicorn matching_service.main:app --reload --port 8000
 pytest                            # run tests
+uvicorn matching_service.main:app --reload --port 8000   # blocks; Ctrl-C to stop
 ```
 
 Verify it is alive:
@@ -64,6 +66,6 @@ Interactive API docs are served at <http://localhost:8000/docs>.
 
 ## Contributing
 
-- Branch per issue; `main` is protected and takes changes by pull request only.
-- Tests are written before implementation. CI enforces **80% line coverage** per service.
+- Branch per issue; `main` takes changes by pull request only (branch protection enabled as part of #1).
+- Tests are written before implementation. CI **will** enforce **80% line coverage** per service — the pipeline and coverage tooling land in #2/#3; nothing enforces it yet.
 - Commit messages: `<type>: <did this> to achieve <this> (#<issue>)`.
