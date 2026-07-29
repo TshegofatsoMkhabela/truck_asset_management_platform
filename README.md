@@ -34,6 +34,13 @@ curl http://localhost:8080/
 
 Key order is not guaranteed — the response is built from `Map.of`, which is unordered. Match on keys, not on the literal string.
 
+Liveness probe:
+
+```bash
+curl http://localhost:8080/health
+# {"status":"UP","service":"backend"}
+```
+
 ### Matching service (Python)
 
 ```bash
@@ -52,7 +59,18 @@ curl http://localhost:8000/
 # {"service":"matching-service","status":"ok","message":"Hello from TAMP matching-service"}
 ```
 
+Liveness probe:
+
+```bash
+curl http://localhost:8000/health
+# {"status":"UP","service":"matching-service"}
+```
+
 Interactive API docs are served at <http://localhost:8000/docs>.
+
+Both services expose `/health` with the same `{"status","service"}` shape, so container
+healthchecks configure one contract rather than two. It is deliberately unauthenticated —
+a probe requiring credentials is useless to the tool that must poll it.
 
 ## Documentation
 
@@ -60,6 +78,7 @@ Interactive API docs are served at <http://localhost:8000/docs>.
 |---|---|
 | [Solution Overview](docs/solution-overview.md) | Purpose, scope, stack and major components |
 | [Requirements Traceability](docs/requirements-traceability.md) | FR-01–FR-12 mapped to the code that implements them |
+| [Testing Summary](docs/testing-summary.md) | Test cases, results, and current coverage per service |
 | [Known Limitations](docs/known-limitations.md) | What is mocked, deferred, or deliberately out of scope |
 | [Architecture Decision Records](docs/adr/) | Why significant technical choices were made |
 | [Diagrams](docs/diagrams/) | Service boundaries and data flow |
@@ -67,5 +86,5 @@ Interactive API docs are served at <http://localhost:8000/docs>.
 ## Contributing
 
 - Branch per issue; `main` takes changes by pull request only (branch protection enabled as part of #1).
-- Tests are written before implementation. CI **will** enforce **80% line coverage** per service — the pipeline and coverage tooling land in #2/#3; nothing enforces it yet.
+- Tests are written before implementation. CI enforces **80% line coverage** per service (JaCoCo / pytest-cov) and fails the job below that bar.
 - Commit messages: `<type>: <did this> to achieve <this> (#<issue>)`.
