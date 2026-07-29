@@ -9,14 +9,8 @@ misconfigured port mapping could route this probe to the backend and still look
 healthy. The service name is what distinguishes them.
 """
 
-from fastapi.testclient import TestClient
 
-from matching_service.main import app
-
-client = TestClient(app)
-
-
-def test_returns_healthy():
+def test_returns_healthy(client):
     response = client.get("/health")
 
     assert response.status_code == 200

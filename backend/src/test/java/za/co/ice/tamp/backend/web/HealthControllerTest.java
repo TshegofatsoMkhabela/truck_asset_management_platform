@@ -21,8 +21,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 class HealthControllerTest {
 
+    @Autowired
+    private MockMvc mockMvc;
+
     @Test
-    void returnsHealthy(@Autowired MockMvc mockMvc) throws Exception {
+    void returnsHealthy() throws Exception {
         mockMvc.perform(get("/health"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("UP"))
