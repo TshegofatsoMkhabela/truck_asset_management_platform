@@ -1,0 +1,85 @@
+name: CodeQL
+
+# Static analysis (SAST) for both services. Unlike the issue's own starting point,
+# this is configured to FAIL the job on any finding, not just surface it — see
+# docs/adr for the record of that decision (#3). CodeQL's own action always exits 0
+# on a completed scan regardless of what it finds, so blocking merge requires an
+# explicit step after `analyze` that inspects the SARIF output itself.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Weekly against main, so a CVE/query-pack update disclosed after a PR merges
+    # is still caught — a PR-only trigger can never re-scan code that didn't change.
+    - cron: '0 3 * * 1'
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: java-kotlin
+            build-mode: autobuild
+          - language: python
+            build-mode: none
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        if: matrix.language == 'java-kotlin'
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: temurin
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+
+      - name: Autobuild
+        if: matrix.build-mode == 'autobuild'
+        uses: github/codeql-action/autobuild@v3
+
+      # Findings still upload to the Security tab (this is the default behaviour
+      # of `analyze`); `output` also gives the next step a local file to inspect.
+      - name: Perform CodeQL analysis
+        id: analyze
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"
+          output: sarif-results
+
+      # `analyze` exits 0 on a completed scan even with findings — this step is
+      # what actually turns them into a failing, blockable status check.
+      - name: Fail the job if CodeQL found anything
+        run: |
+          python3 - <<'EOF'
+          import glob, json, sys
+
+          total = 0
+          for path in glob.glob("sarif-results/*.sarif"):
+              with open(path, encoding="utf-8") as f:
+                  data = json.load(f)
+              for run in data.get("runs", []):
+                  total += len(run.get("results", []))
+
+          print(f"CodeQL findings: {total}")
+          sys.exit(1 if total else 0)
+          EOF
