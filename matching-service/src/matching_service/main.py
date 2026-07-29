@@ -37,3 +37,18 @@ def health() -> dict[str, str]:
         "status": "UP",
         "service": "matching-service",
     }
+
+
+@app.get("/ping")
+def ping() -> dict[str, object]:
+    """Fixed target for the orchestrator's cross-service integration call (#5).
+
+    Deliberately separate from ``/health``: this is a target for proving the
+    network round trip works, not a liveness contract. Keeping it apart means a
+    future change to ``/health`` (e.g. a database check in #7/#8) never breaks
+    the integration test for reasons unrelated to integration.
+    """
+    return {
+        "service": "matching-service",
+        "pong": True,
+    }
