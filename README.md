@@ -22,7 +22,7 @@ Each service runs independently. Full containerised startup arrives with the Doc
 ```bash
 cd backend
 mvn spring-boot:run          # starts on http://localhost:8080
-mvn test                     # run tests
+mvn clean verify             # run tests + the 80% coverage gate
 ```
 
 Verify it is alive:
@@ -86,5 +86,6 @@ a probe requiring credentials is useless to the tool that must poll it.
 ## Contributing
 
 - Branch per issue; `main` takes changes by pull request only (branch protection enabled as part of #1).
-- Tests are written before implementation. CI enforces **80% line coverage** per service (JaCoCo / pytest-cov) and fails the job below that bar.
+- Tests are written before implementation. CI enforces **80% line coverage** per service and fails the job below that bar. Coverage is measured by JaCoCo (a Java agent that records which lines actually executed during a test run) and `pytest-cov` (its Python equivalent, built on `coverage.py`).
+- `mvn clean verify`, not `mvn test`: the coverage gate is bound to Maven's `verify` phase, so `mvn test` runs the tests but silently skips the check. `clean` matters too — the JaCoCo agent appends to its data file by default, so a reused `target/` directory measures coverage accumulated across earlier runs.
 - Commit messages: `<type>: <did this> to achieve <this> (#<issue>)`.

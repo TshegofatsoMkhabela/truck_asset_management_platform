@@ -25,6 +25,11 @@ what distinguishes them.
 
 Line coverage, gated at **80% per service**. CI fails the job below that bar.
 
+Coverage is measured by **JaCoCo** — a Java agent that attaches to the test run and
+records which lines actually executed — and **`pytest-cov`**, its Python counterpart,
+built on the `coverage.py` library. Both report *line* coverage: the percentage of
+executable lines a test run touched at least once.
+
 | Service | Tool | Line coverage | Gate | Status |
 |---|---|---|---|---|
 | backend | JaCoCo 0.8.12 | **100%** (4/4 lines) | 80% | ✅ Pass |

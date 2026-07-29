@@ -11,10 +11,25 @@ on:
   pull_request:
     branches: [main]
 
+# The workflow only reads the repository and uploads artifacts, so the token it is
+# handed needs no write access. The repository default is already `read`, but that
+# is a setting anyone can change; stating it here keeps the grant pinned to the job
+# rather than to a checkbox elsewhere.
+permissions:
+  contents: read
+
+# Cancel superseded runs: pushing three times to an open PR otherwise leaves three
+# pairs of jobs racing, and an older one can report after a newer one.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   backend:
     name: backend (Java)
     runs-on: ubuntu-latest
+    # A wedged dependency download otherwise burns the GitHub default of 360 minutes.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
@@ -35,7 +50,7 @@ jobs:
         run: mvn --batch-mode clean verify
 
       - name: Upload coverage report
-        if: always()
+        if: '!cancelled()'
         uses: actions/upload-artifact@v4
         with:
           name: coverage-backend
@@ -48,6 +63,7 @@ jobs:
   matching-service:
     name: matching-service (Python)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
@@ -72,7 +88,7 @@ jobs:
         run: pytest
 
       - name: Upload coverage report
-        if: always()
+        if: '!cancelled()'
         uses: actions/upload-artifact@v4
         with:
           name: coverage-matching-service
