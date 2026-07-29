@@ -4,3 +4,9 @@ spring:
 
 server:
   port: ${SERVER_PORT:8080}
+
+# Where the Python matching-service lives. Overridden by the MATCHING_SERVICE_URL
+# environment variable so #8's Docker Compose can point this at a container
+# hostname without touching code.
+matching-service:
+  base-url: ${MATCHING_SERVICE_URL:http://localhost:8000}
