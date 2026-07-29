@@ -45,5 +45,36 @@ services:
       timeout: 3s
       retries: 20
 
+  backend:
+    build:
+      context: ./backend
+    environment:
+      # "db", the Compose service name above, not localhost: from inside this
+      # container, the database is reached by its name on the Compose network.
+      DB_URL: jdbc:postgresql://db:5432/${DB_NAME:-tamp}
+      DB_USERNAME: ${DB_USERNAME:-tamp}
+      DB_PASSWORD: ${DB_PASSWORD:-tamp}
+      MATCHING_SERVICE_URL: http://matching-service:8000
+      JWT_SECRET: ${JWT_SECRET}
+    # Loopback only, matching the `db` service's own reasoning above: before #9 lands
+    # every endpoint here is unauthenticated, so nothing on the local network should
+    # be able to reach it either. A browser on this machine still reaches it fine at
+    # http://localhost:8080, loopback and localhost are the same address.
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      db:
+        # Waits for Postgres to actually accept connections, not just for its
+        # container process to start: ddl-auto:validate fails startup outright if
+        # the backend reaches Postgres before db-data has been initialised.
+        condition: service_healthy
+
+  matching-service:
+    build:
+      context: ./matching-service
+    # Loopback only; same reasoning as `backend` above.
+    ports:
+      - "127.0.0.1:8000:8000"
+
 volumes:
   db-data:

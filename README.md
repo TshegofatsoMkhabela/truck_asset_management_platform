@@ -15,15 +15,48 @@ Other documents refer to the Java service as *"the orchestrator"* — that is it
 
 ## Quick start
 
-### Local database (Docker)
+### Full stack (Docker Compose) — the fastest way to a running system
 
-The backend needs a PostgreSQL 18 database. `docker-compose.yml` at the repository root
-brings one up, schema and sample data included. The same schema #6 defines is applied
-automatically the first time the container starts, via Postgres's own
-`docker-entrypoint-initdb.d` mechanism (no separate migration step to remember).
+`docker-compose.yml` at the repository root brings up all three pieces, orchestrator,
+matching-service and PostgreSQL, with one command. No local Java, Maven, Python or
+`pip install` needed for this path; only Docker.
 
 ```bash
-docker compose up -d
+cp .env.example .env      # once per clone; edit the placeholder values if you want to
+docker compose up --build -d
+```
+
+Confirm both services are actually serving traffic, not just that their containers started:
+
+```bash
+curl http://localhost:8080/health
+# {"service":"backend","status":"UP"}
+
+curl http://localhost:8000/health
+# {"status":"UP","service":"matching-service"}
+```
+
+Interactive API documentation:
+
+- matching-service (FastAPI, generated automatically): <http://localhost:8000/docs>
+- orchestrator (springdoc/Swagger UI): <http://localhost:8080/swagger-ui.html>, arrives with #9;
+  until then this URL 404s, which is expected on `main` today
+
+`.env` is gitignored and holds real local values; `.env.example` is the only one committed,
+placeholders only, per the brief's "controlled configuration, no secrets committed" line
+(section 4).
+
+### Local database only (Docker), services run natively
+
+Useful for active development on the backend or matching-service, where you want fast
+in-process restarts rather than rebuilding a container on every change. The backend needs a
+PostgreSQL 18 database; the same `docker-compose.yml` above can bring up just that piece.
+The schema #6 defines is applied automatically the first time the container starts, via
+Postgres's own `docker-entrypoint-initdb.d` mechanism (no separate migration step to
+remember).
+
+```bash
+docker compose up -d db
 ```
 
 Confirm it came up with the expected tables:
@@ -38,7 +71,7 @@ several projects run Postgres locally, and this repo hit exactly that with an un
 touching whatever already holds 5432:
 
 ```bash
-DB_PORT=55432 docker compose up -d
+DB_PORT=55432 docker compose up -d db
 ```
 
 **The schema and seed data only apply once, on a genuinely empty volume.** If you change a
@@ -46,7 +79,7 @@ migration file after the first `up`, a plain restart will not re-run it. Remove 
 first:
 
 ```bash
-docker compose down -v && docker compose up -d
+docker compose down -v && docker compose up -d db
 ```
 
 ### Environment switching: one set of values, not two codepaths
@@ -161,8 +194,9 @@ curl http://localhost:8080/integration/ping
 The response says `matching-service`, not `backend` — that is the point: it proves the
 orchestrator really made the hop rather than answering for itself.
 
-The target is configured by `MATCHING_SERVICE_URL` (default `http://localhost:8000`),
-so Docker Compose in #8 can repoint it at a container hostname without a code change:
+The target is configured by `MATCHING_SERVICE_URL` (default `http://localhost:8000`), so
+Docker Compose (#8) repoints it at the container hostname `matching-service` with no code
+change; see `docker-compose.yml`'s `backend` service.
 
 ```bash
 MATCHING_SERVICE_URL=http://localhost:8010 mvn spring-boot:run
