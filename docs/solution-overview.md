@@ -18,7 +18,7 @@ Matching is **rule-based, not machine-learned**. Tracking, compliance verificati
 |---|---|---|
 | Orchestrator / API | Java 21, Spring Boot, Maven | Spring Security is the intended auth and RBAC mechanism, so the web layer is chosen to match it rather than be rewritten later |
 | Matching service | Python 3.11+, FastAPI | Built-in request validation, generated OpenAPI docs, and a first-class test client — three separate add-ons in the alternatives considered |
-| Database | PostgreSQL 18 | Constraints carry the data-integrity rules the rubric grades, so the engine is chosen for what it enforces rather than for storage alone. Version 18 specifically, because the schema generates primary keys with the built-in `uuidv7()` function introduced in that release. See [ADR-1](adr/0001-data-model-and-database-architecture.md) |
+| Database | PostgreSQL 18 | Constraints carry the data-integrity rules the rubric grades, so the engine is chosen for what it enforces rather than for storage alone. Version 18 specifically, because the schema generates primary keys with the built-in `uuidv7()` function introduced in that release. See [ADR-2](adr/0002-data-model-and-database-architecture.md) |
 | Local runtime | Docker Compose | *To be confirmed when containerisation lands* |
 
 ## Major components
@@ -36,7 +36,8 @@ Recorded as ADRs in [`docs/adr/`](adr/) as they are made.
 
 | ADR | Decision | Issue |
 |---|---|---|
-| [ADR-1](adr/0001-data-model-and-database-architecture.md) | Data model and database architecture: time-ordered UUID keys, `CHECK` constraints over native enums, numbered SQL migrations with no migration tool, and an append-only audit log with no foreign keys | #6 |
+| [ADR-1](adr/0001-local-secret-scanning.md) | Secrets are blocked locally at commit time by a Gitleaks pre-commit hook rather than only being caught server-side | #4 |
+| [ADR-2](adr/0002-data-model-and-database-architecture.md) | Data model and database architecture: time-ordered UUID keys, `CHECK` constraints over native enums, numbered SQL migrations with no migration tool, and an append-only audit log with no foreign keys | #6 |
 
 ### Database entities
 

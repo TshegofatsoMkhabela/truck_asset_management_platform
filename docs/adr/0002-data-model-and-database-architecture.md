@@ -1,4 +1,4 @@
-# ADR-1: Data model and database architecture
+# ADR-2: Data model and database architecture
 
 **Status:** Accepted
 **Date:** 2026-07-29

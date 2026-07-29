@@ -1,0 +1,168 @@
+name: CI
+
+# Two independent jobs, one per service. Deliberately no `paths:` filters and no
+# `needs:` between them: a required status check that gets skipped never reports,
+# and GitHub treats "expected but never reported" as pending forever, which leaves
+# the PR permanently unmergeable. Both jobs always running costs a couple of
+# minutes on doc-only PRs and keeps the merge gate honest.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# The workflow only reads the repository and uploads artifacts, so the token it is
+# handed needs no write access. The repository default is already `read`, but that
+# is a setting anyone can change; stating it here keeps the grant pinned to the job
+# rather than to a checkbox elsewhere.
+permissions:
+  contents: read
+
+# Cancel superseded runs: pushing three times to an open PR otherwise leaves three
+# pairs of jobs racing, and an older one can report after a newer one.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: backend (Java)
+    runs-on: ubuntu-latest
+    # A wedged dependency download otherwise burns the GitHub default of 360 minutes.
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: temurin
+          cache: maven
+
+      # `clean` is load-bearing, not habit. The JaCoCo agent appends to
+      # target/jacoco.exec by default, so a cached or reused target/ directory
+      # would gate against coverage data from an earlier run — a green check
+      # proving nothing. Verified locally: without clean, deleting a test left
+      # coverage reporting 100%.
+      - name: Build, test and check coverage
+        working-directory: backend
+        run: mvn --batch-mode clean verify
+
+      - name: Upload coverage report
+        if: '!cancelled()'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-backend
+          path: backend/target/site/jacoco/
+          # `warn`, not `error`: this step runs on failure too, and a compile error
+          # produces no report directory. Erroring there would add a second, misleading
+          # red step on top of the real one. Both paths were verified locally.
+          if-no-files-found: warn
+
+  matching-service:
+    name: matching-service (Python)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          # Without this, the cache step searches for **/requirements.txt, finds
+          # nothing, and fails the job. This project declares dependencies in
+          # pyproject.toml, so the path has to be named explicitly.
+          cache-dependency-path: matching-service/pyproject.toml
+
+      - name: Install dependencies
+        working-directory: matching-service
+        run: pip install -e ".[dev]"
+
+      # The 80% threshold comes from pyproject.toml, not a flag here, so this
+      # command behaves identically to a local `pytest` run.
+      - name: Test and check coverage
+        working-directory: matching-service
+        run: pytest
+
+      - name: Upload coverage report
+        if: '!cancelled()'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-matching-service
+          path: |
+            matching-service/htmlcov/
+            matching-service/coverage.xml
+          # `warn`, not `error`: this step runs on failure too, and a compile error
+          # produces no report directory. Erroring there would add a second, misleading
+          # red step on top of the real one. Both paths were verified locally.
+          if-no-files-found: warn
+
+  # Third job, independent of the two above. It is the only job that runs both
+  # services at once, which is the entire point of #5: prove a Java service can
+  # reach a Python service over a real network call before any feature depends on
+  # it. Kept separate so a failure here reads as "the wiring broke", never as
+  # "the backend broke" — the per-service jobs above stay single-service.
+  e2e:
+    name: e2e (cross-service)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: matching-service/pyproject.toml
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: temurin
+          cache: maven
+
+      - name: Install matching-service
+        working-directory: matching-service
+        run: pip install -e ".[dev]"
+
+      - name: Start matching-service
+        working-directory: matching-service
+        run: |
+          nohup uvicorn matching_service.main:app --port 8000 > uvicorn.log 2>&1 &
+          echo "started"
+
+      # Poll until the service answers rather than sleeping a fixed interval: a
+      # sleep is either too short (flaky) or too long (slow), and neither tells you
+      # what happened. Failing here with the log printed distinguishes "the service
+      # never came up" from "the round trip is broken" — two very different bugs.
+      - name: Wait for matching-service to be ready
+        working-directory: matching-service
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8000/ping > /dev/null; then
+              echo "matching-service ready after ${i}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "matching-service failed to start; log follows:"
+          cat uvicorn.log
+          exit 1
+
+      # -Pe2e runs ONLY the e2e-tagged tests and skips the coverage gate, which
+      # measures the unit suite in the backend job rather than this single round trip.
+      - name: Run cross-service end-to-end test
+        working-directory: backend
+        env:
+          MATCHING_SERVICE_URL: http://localhost:8000
+        run: mvn --batch-mode verify -Pe2e
+
+      - name: Print matching-service log on failure
+        if: failure()
+        working-directory: matching-service
+        run: cat uvicorn.log
