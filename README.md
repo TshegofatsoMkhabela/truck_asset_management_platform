@@ -69,3 +69,38 @@ Interactive API docs are served at <http://localhost:8000/docs>.
 - Branch per issue; `main` takes changes by pull request only (branch protection enabled as part of #1).
 - Tests are written before implementation. CI **will** enforce **80% line coverage** per service — the pipeline and coverage tooling land in #2/#3; nothing enforces it yet.
 - Commit messages: `<type>: <did this> to achieve <this> (#<issue>)`.
+
+### Secret scanning
+
+Every commit is scanned for secrets **before** it is created. Run this once per clone,
+before your first commit:
+
+```bash
+pip install pre-commit          # once per machine
+pre-commit install              # installs the git hook into this clone
+pre-commit install-hooks        # pre-builds the scanner — takes a few minutes, once
+```
+
+`install-hooks` is not optional in practice. The scanner is a Go program that gets compiled
+on first use; if you skip this step, that build happens inside your first `git commit`,
+which then appears to hang for several minutes. After it, each commit costs ~100ms.
+
+A commit containing a secret is rejected before it exists:
+
+```
+Detect hardcoded secrets.................................................Failed
+RuleID:      aws-access-token
+File:        config.txt
+```
+
+Fix it by removing the secret and reading it from an environment variable instead — the
+values themselves belong in `.env`, which is gitignored.
+
+If a finding is a **false positive**, add a narrow exception to [`.gitleaks.toml`](.gitleaks.toml)
+with a comment explaining why it isn't a real secret. Do not reach for `git commit --no-verify`:
+it bypasses the check silently and leaves no record that a scan was skipped.
+
+Why local, and why this matters: once a secret is committed, deleting it does not un-expose
+it — it may already exist in a clone, a fork or a CI log, so the value has to be rotated.
+Rationale in [ADR 0001](docs/adr/0001-local-secret-scanning.md); the gap this leaves is
+recorded in [Known Limitations](docs/known-limitations.md).
