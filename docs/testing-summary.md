@@ -29,6 +29,89 @@ the row says so rather than carrying a placeholder.
 | T-16 | `updated_at` advances on modification and equals `created_at` on insert (3 tests) | backend (db) | `updated_at > created_at` after an UPDATE | As expected | ✅ Pass | #6 |
 | T-17 | `spring.jpa.hibernate.ddl-auto: validate` rejects a deliberately mismatched entity | backend (persistence) | Application context fails to start | As expected | ✅ Pass | #6 |
 | T-18 | Every one of the 10 JPA entities round-trips through its repository: generated id, `JSONB` (`matches.reasons`, `audit_logs.details`), `CITEXT` (case-insensitive `findByEmail`), `INET` (`receipts.ip_address`), and each derived query method (12 tests) | backend (persistence) | Save then read-back matches; derived queries return only the matching rows | As expected | ✅ Pass | #6 |
+| T-19 | `docker compose up` on an empty volume creates all 10 schema tables via `docker-entrypoint-initdb.d` | db (docker) | `\dt` lists all 10 tables | As expected | ✅ Pass | #7 |
+| T-20 | The seed script populates all 9 seedable tables with a complete demo journey (one accepted match, receipt, 3 tracking events, 2 ratings, 1 dispute, 1 compliance document) | db (docker) | Row counts: users 3, loads 2, trucks 2, matches 1, receipts 1, tracking_events 3, ratings 2, disputes 1, compliance_documents 1 | As expected | ✅ Pass | #7 |
+| T-21 | Seeded password hashes are genuine, verifiable bcrypt (`pgcrypto`'s `crypt()`/`gen_salt('bf')`), not placeholders | db (docker) | `password_hash = crypt('TampDemo2026!', password_hash)` is `true` for all 3 demo accounts | As expected | ✅ Pass | #7 |
+| T-22 | **The application starts against the dockerized local DB using only the `DB_URL`/`DB_USERNAME`/`DB_PASSWORD` config flags, and a basic read/write against it succeeds** (issue #7 Minimum Integration Test) | backend + db (docker) | App boots, Hibernate schema validation passes, `/health` returns 200; a direct `INSERT`/`SELECT`/`DELETE` against the same live database succeeds while the app remains connected | As expected | ✅ Pass | #7 |
+
+### Evidence for T-19–T-22
+
+```
+$ docker compose exec -T db psql -U tamp -d tamp -c '\dt'
+ public | audit_logs           | table | tamp
+ public | compliance_documents | table | tamp
+ public | disputes             | table | tamp
+ public | loads                | table | tamp
+ public | matches              | table | tamp
+ public | ratings              | table | tamp
+ public | receipts             | table | tamp
+ public | tracking_events      | table | tamp
+ public | trucks               | table | tamp
+ public | users                | table | tamp
+(10 rows)
+```
+
+```
+$ docker compose exec -T db psql -U tamp -d tamp -c "SELECT ... row counts ..."
+users 3 | loads 2 | trucks 2 | matches 1 | receipts 1
+tracking_events 3 | ratings 2 | disputes 1 | compliance_documents 1
+```
+
+```
+$ docker compose exec -T db psql -U tamp -d tamp -c \
+  "SELECT email, password_hash = crypt('TampDemo2026!', password_hash) FROM users;"
+ admin@tamp.example       | t
+ owner@tamp.example       | t
+ transporter@tamp.example | t
+```
+
+```
+$ DB_URL=jdbc:postgresql://localhost:55432/tamp DB_USERNAME=tamp DB_PASSWORD=tamp mvn spring-boot:run
+...HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@...
+...Database version: 18.4
+...Started BackendApplication in 16.93 seconds
+$ curl http://localhost:8080/health
+{"status":"UP","service":"backend"}
+```
+
+```
+$ docker compose exec -T db psql -U tamp -d tamp -c "
+INSERT INTO users (full_name, email, password_hash, role) VALUES ('MIT Check', 'mit-check@tamp.example', 'x', 'ADMIN');
+SELECT full_name, email FROM users WHERE email = 'mit-check@tamp.example';
+DELETE FROM users WHERE email = 'mit-check@tamp.example';
+"
+INSERT 0 1
+ MIT Check | mit-check@tamp.example
+DELETE 1
+```
+
+T-22's read/write is demonstrated directly against the database, not through an HTTP
+endpoint: no route in the application touches persistence yet (that begins at #10). The
+app boot and the direct database check were run concurrently against the *same* live
+container, which is what proves the config-flag connection and the read/write both hold
+at once, rather than proving two unrelated things.
+
+### A near-miss caught before commit, not after
+
+An earlier version of `docker-compose.yml` bind-mounted `db/migrations` directly as
+`/docker-entrypoint-initdb.d` (read-write, since Docker cannot create a second bind
+mount's mountpoint inside a directory mounted read-only). It worked: T-19 through T-22
+above all passed against it, but `git status` before committing showed an untracked
+0-byte file, `db/migrations/Z01__dev_seed.sql`, sitting in the actual git-tracked source
+folder. Because the read-write bind mount is a live passthrough to the host directory,
+not a copy, creating the second mount's mountpoint stub inside it wrote that stub
+directly onto the host filesystem, and it survived `docker compose down`.
+
+Every green test run above was run *before* this was noticed. The tests proved the schema
+and seed data landed correctly; they said nothing about a side effect on the host outside
+the container. Fixed by moving to `db/Dockerfile`, which `COPY`s both directories into the
+image at build time, with no bind mount into `db/` so nothing to leak. Re-verified against the
+rebuilt image: same 10 tables, same row counts, `git status` clean afterward.
+
+The transferable point: a passing integration test proves the thing it was written to
+check, not the absence of every side effect. Checking `git status` after running
+infrastructure changes is cheap and would have caught this regardless of which specific
+mechanism caused it.
 
 T-08 to T-18 run against a real PostgreSQL 18 container started by **Testcontainers**, a
 library that starts and disposes of Docker containers around a test run, rather than an
