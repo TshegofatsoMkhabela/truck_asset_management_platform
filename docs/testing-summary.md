@@ -98,6 +98,21 @@ here are taken from the JaCoCo CSV directly, not estimated.
 |---|---|---|---|
 | *(none)* | | | |
 
+### Fixed after PR #24's first CI run
+
+`CrossServiceIntegrationE2ETest` (#5, T-07) failed in CI with the same cause as
+`HelloControllerTest`/`HealthControllerTest`: it boots the full application context, and
+once #6 gave the application a real datasource, every full-context test needs one to reach.
+Fixed the same way, by extending `JpaTestBase` so it points at the same migrated
+Testcontainers Postgres. Verified locally against a real `uvicorn` instance
+(`mvn verify -Pe2e`, `BUILD SUCCESS`) before pushing, not just inferred from the CI log.
+
+Separately, PR #24's `dependency-review` check failed with "Dependency review is not
+supported on this repository. Please ensure Dependency graph is enabled." This was a
+repository setting, not a code defect: Dependabot alerts (`vulnerability-alerts`) were
+disabled, which the dependency-review feature depends on. Enabled via
+`gh api -X PUT repos/.../vulnerability-alerts`; the job passed on rerun with no code change.
+
 ## How to reproduce
 
 Backend:
