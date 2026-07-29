@@ -1,0 +1,26 @@
+name: Dependency Review
+
+# Runs only on PRs that touch a dependency manifest (backend/pom.xml or
+# matching-service/pyproject.toml) and diffs the dependency graph against the base
+# branch, so a newly-introduced known-vulnerable version is flagged before merge —
+# at PR time, not after, unlike Dependabot alerts which surface post-merge and
+# require a repo setting (`dependabot_security_updates`) this repo doesn't have
+# enabled.
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - backend/pom.xml
+      - matching-service/pyproject.toml
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  dependency-review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/dependency-review-action@v4
