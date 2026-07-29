@@ -1,0 +1,75 @@
+name: CI
+
+# Two independent jobs, one per service. Deliberately no `paths:` filters and no
+# `needs:` between them: a required status check that gets skipped never reports,
+# and GitHub treats "expected but never reported" as pending forever, which leaves
+# the PR permanently unmergeable. Both jobs always running costs a couple of
+# minutes on doc-only PRs and keeps the merge gate honest.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  backend:
+    name: backend (Java)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: temurin
+          cache: maven
+
+      # `clean` is load-bearing, not habit. The JaCoCo agent appends to
+      # target/jacoco.exec by default, so a cached or reused target/ directory
+      # would gate against coverage data from an earlier run — a green check
+      # proving nothing. Verified locally: without clean, deleting a test left
+      # coverage reporting 100%.
+      - name: Build, test and check coverage
+        working-directory: backend
+        run: mvn --batch-mode clean verify
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-backend
+          path: backend/target/site/jacoco/
+          if-no-files-found: error
+
+  matching-service:
+    name: matching-service (Python)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install dependencies
+        working-directory: matching-service
+        run: pip install -e ".[dev]"
+
+      # The 80% threshold comes from pyproject.toml, not a flag here, so this
+      # command behaves identically to a local `pytest` run.
+      - name: Test and check coverage
+        working-directory: matching-service
+        run: pytest
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-matching-service
+          path: |
+            matching-service/htmlcov/
+            matching-service/coverage.xml
+          if-no-files-found: error
