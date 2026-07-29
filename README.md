@@ -72,8 +72,8 @@ Interactive API docs are served at <http://localhost:8000/docs>.
 
 ### Secret scanning
 
-Every commit is scanned for secrets **before** it is created. Run this once per clone,
-before your first commit:
+Once installed, this hook scans every commit for secrets **before** the commit is created.
+It is not automatic — run this once per clone, before your first commit:
 
 ```bash
 pip install pre-commit          # once per machine
@@ -83,7 +83,8 @@ pre-commit install-hooks        # pre-builds the scanner — takes a few minutes
 
 `install-hooks` is not optional in practice. The scanner is a Go program that gets compiled
 on first use; if you skip this step, that build happens inside your first `git commit`,
-which then appears to hang for several minutes. After it, each commit costs ~100ms.
+which then appears to hang for several minutes. After it, the check adds well under a second
+to each commit.
 
 A commit containing a secret is rejected before it exists:
 
@@ -100,7 +101,6 @@ If a finding is a **false positive**, add a narrow exception to [`.gitleaks.toml
 with a comment explaining why it isn't a real secret. Do not reach for `git commit --no-verify`:
 it bypasses the check silently and leaves no record that a scan was skipped.
 
-Why local, and why this matters: once a secret is committed, deleting it does not un-expose
-it — it may already exist in a clone, a fork or a CI log, so the value has to be rotated.
-Rationale in [ADR 0001](docs/adr/0001-local-secret-scanning.md); the gap this leaves is
-recorded in [Known Limitations](docs/known-limitations.md).
+Why the check runs here rather than in CI, and what it does *not* cover:
+[ADR 0001](docs/adr/0001-local-secret-scanning.md) and
+[Known Limitations](docs/known-limitations.md).

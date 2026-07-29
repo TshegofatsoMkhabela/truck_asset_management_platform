@@ -63,4 +63,4 @@ oversight: the CI-side backstop that would close it is explicitly out of scope f
 
 **Observed property — a broken config fails closed.** An invalid `.gitleaks.toml` causes the
 hook to exit non-zero and the commit to be rejected, rather than passing unscanned. Verified
-while writing this ADR, by accident, which is the best way to learn it.
+during #4 by writing an invalid config.

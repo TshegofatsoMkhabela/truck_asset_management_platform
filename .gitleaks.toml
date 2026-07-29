@@ -1,24 +1,18 @@
-# Gitleaks configuration for TAMP (#4).
+# Gitleaks configuration for TAMP (#4). Rationale: docs/adr/0001-local-secret-scanning.md
 #
-# `extend.useDefault` pulls in Gitleaks' full built-in ruleset (AWS keys, private
-# keys, tokens, high-entropy strings, ...). Rules are NOT re-declared here — this
-# file exists only to hold project-specific exceptions on top of those defaults.
+# `useDefault` pulls in Gitleaks' full built-in ruleset. Rules are not re-declared
+# here — this file exists only to hold project-specific exceptions on top of them.
 #
-# The repo currently scans clean, so there are no exceptions yet. There is
-# deliberately no empty [allowlist] block: Gitleaks rejects an allowlist with no
-# checks in it ("must contain at least one check for: commits, paths, regexes, or
-# stopwords") and refuses to run at all.
-#
-# To add the first exception, uncomment the block below and keep it narrow. Each
-# entry needs a comment saying WHY the match is not a real secret:
+# There are no exceptions yet, and deliberately no empty [allowlist] block: Gitleaks
+# rejects an allowlist containing no checks and then refuses to run at all. To add the
+# first one, uncomment and keep it narrow, with a comment saying why it is not a real
+# secret. Prefer `regexes` (one known-fake literal) over `paths` — a path exemption
+# also covers any real secret added to that directory later.
 #
 #   [allowlist]
 #   description = "Project-specific exceptions."
-#   regexes = ['''EXAMPLE_FAKE_KEY_VALUE''']   # a specific known-fake literal
-#   paths   = ['''^docs/samples/.*''']         # a whole path (blunt — last resort)
-#
-# Prefer `regexes` over `paths`: a path exception exempts everything in it,
-# including a real secret added to that directory later.
+#   regexes = ['''EXAMPLE_FAKE_KEY_VALUE''']
+#   paths   = ['''^path/to/fixtures/.*''']
 
 title = "TAMP secret scanning"
 

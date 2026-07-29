@@ -27,6 +27,7 @@ Constraints arising from how the project is being built rather than from the cod
 
 | Limitation | Detail | Recommended change on handoff |
 |---|---|---|
+| Secret scanning has **no regression test** | The hook was verified by hand when it landed (a fake key rejected, the same file accepted once cleaned), but nothing re-checks it. A later config edit or tooling upgrade could disable it silently, because a passing commit and an unscanned commit look identical | Commit the verification as a script and run it in CI, so a broken scanner fails visibly instead of quietly |
 | Secret scanning is **opt-in per clone** | The hook only runs after a contributor runs `pre-commit install`, and `git commit --no-verify` skips it. Nothing verifies that either happened, so the control protects the careless but not the determined | Pair with the CI-side backstop above; a server-side check is the only version of this that cannot be opted out of |
 | Pull requests require **0 approving reviews** | `main` is protected and takes changes by PR only, but GitHub does not permit approving your own pull request. On a single-contributor repository, requiring ≥1 approval would make every PR unmergeable except by admin override — which turns the protection into theatre, since the override becomes routine | Raise required approvals to **≥1** as soon as a second contributor exists. The gate structure is already in place; only the count changes |
 
