@@ -4,14 +4,8 @@ Defends against the scaffolding failure of a package that imports cleanly but
 whose app never assembles — a failure an import-only check would not catch.
 """
 
-from fastapi.testclient import TestClient
 
-from matching_service.main import app
-
-client = TestClient(app)
-
-
-def test_returns_greeting():
+def test_returns_greeting(client):
     response = client.get("/")
 
     assert response.status_code == 200
