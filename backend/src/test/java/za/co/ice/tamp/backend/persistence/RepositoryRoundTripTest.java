@@ -82,11 +82,15 @@ class RepositoryRoundTripTest extends JpaTestBase {
         assertThat(reloaded.getUpdatedAt()).isNotNull();
     }
 
+    // The three tests below each exercise one entity's "moves to a decided state" transition
+    // method (Match.decide, Dispute.resolve, ComplianceDocument.review). They were originally
+    // one combined test; split apart because each has its own independent setup and asserts
+    // on a different entity, so nothing was shared by keeping them merged.
+
     @Test
-    void moves_a_match_a_dispute_and_a_compliance_document_through_their_decision_lifecycle() {
+    void accepts_a_match_and_records_who_decided() {
         User owner = users.save(new User("O8", "o8@example.com", "hash", "FREIGHT_OWNER"));
         User transporter = users.save(new User("T8", "t8@example.com", "hash", "TRANSPORTER"));
-        User admin = users.save(new User("Admin8", "admin8@example.com", "hash", "ADMIN"));
         Load load = loads.save(new Load(owner.getId(), "Rustenburg", "Klerksdorp", "GENERAL",
                 new BigDecimal("4000.00"), new BigDecimal("15.00"),
                 OffsetDateTime.now(), OffsetDateTime.now().plusDays(1)));
@@ -99,22 +103,38 @@ class RepositoryRoundTripTest extends JpaTestBase {
         Match match = matches.save(new Match(load.getId(), truck.getId(), new BigDecimal("90.00"),
                 List.of("capacity sufficient")));
         match.decide("ACCEPTED", owner.getId());
-        Match savedMatch = matches.save(match);
-        assertThat(matches.findById(savedMatch.getId()).orElseThrow().getDecidedBy())
+        Match saved = matches.save(match);
+
+        assertThat(matches.findById(saved.getId()).orElseThrow().getDecidedBy())
                 .isEqualTo(owner.getId());
+    }
+
+    @Test
+    void resolves_a_dispute_and_records_who_resolved() {
+        User owner = users.save(new User("O10", "o10@example.com", "hash", "FREIGHT_OWNER"));
+        User admin = users.save(new User("Admin10", "admin10@example.com", "hash", "ADMIN"));
+        User reported = users.save(new User("T10", "t10@example.com", "hash", "TRANSPORTER"));
 
         Dispute dispute = disputes.save(
-                new Dispute(match.getId(), null, owner.getId(), "Truck arrived a day late"));
+                new Dispute(null, reported.getId(), owner.getId(), "Truck arrived a day late"));
         dispute.resolve("RESOLVED", admin.getId(), "Refund issued");
-        Dispute savedDispute = disputes.save(dispute);
-        assertThat(disputes.findById(savedDispute.getId()).orElseThrow().getResolvedBy())
+        Dispute saved = disputes.save(dispute);
+
+        assertThat(disputes.findById(saved.getId()).orElseThrow().getResolvedBy())
                 .isEqualTo(admin.getId());
+    }
+
+    @Test
+    void reviews_a_compliance_document_and_records_who_reviewed() {
+        User transporter = users.save(new User("T11", "t11@example.com", "hash", "TRANSPORTER"));
+        User admin = users.save(new User("Admin11", "admin11@example.com", "hash", "ADMIN"));
 
         ComplianceDocument document = complianceDocuments.save(
                 new ComplianceDocument(transporter.getId(), "INSURANCE", "insurance.pdf"));
         document.review("APPROVED", admin.getId());
-        ComplianceDocument savedDocument = complianceDocuments.save(document);
-        assertThat(complianceDocuments.findById(savedDocument.getId()).orElseThrow().getStatus())
+        ComplianceDocument saved = complianceDocuments.save(document);
+
+        assertThat(complianceDocuments.findById(saved.getId()).orElseThrow().getStatus())
                 .isEqualTo("APPROVED");
     }
 

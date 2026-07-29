@@ -8,6 +8,8 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Stream;
 
 /**
@@ -20,6 +22,11 @@ import java.util.stream.Stream;
 public final class SchemaFixture {
 
     private static final Path MIGRATIONS = Path.of("..", "db", "migrations");
+
+    // The migration set is read from disk once and reused for every test method across the
+    // suite (roughly 50 methods reset their schema in @BeforeEach), rather than re-reading 11
+    // files from disk on every single test. The content never changes during a test run.
+    private static final Map<Path, String> SQL_CACHE = new ConcurrentHashMap<>();
 
     private SchemaFixture() {
     }
@@ -45,17 +52,20 @@ public final class SchemaFixture {
     /** Runs every migration against the supplied connection, failing loudly on the first bad file. */
     public static void applyAll(Connection connection) {
         for (Path migration : migrationFiles()) {
-            String sql;
-            try {
-                sql = Files.readString(migration);
-            } catch (IOException e) {
-                throw new IllegalStateException("Could not read " + migration, e);
-            }
+            String sql = SQL_CACHE.computeIfAbsent(migration, SchemaFixture::readFile);
             try (Statement statement = connection.createStatement()) {
                 statement.execute(sql);
             } catch (SQLException e) {
                 throw new IllegalStateException("Migration failed: " + migration.getFileName(), e);
             }
+        }
+    }
+
+    private static String readFile(Path migration) {
+        try {
+            return Files.readString(migration);
+        } catch (IOException e) {
+            throw new IllegalStateException("Could not read " + migration, e);
         }
     }
 }
