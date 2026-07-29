@@ -15,13 +15,90 @@ Other documents refer to the Java service as *"the orchestrator"* — that is it
 
 ## Quick start
 
-Each service runs independently. Full containerised startup arrives with the Docker Compose work.
+### Local database (Docker)
+
+The backend needs a PostgreSQL 18 database. `docker-compose.yml` at the repository root
+brings one up, schema and sample data included. The same schema #6 defines is applied
+automatically the first time the container starts, via Postgres's own
+`docker-entrypoint-initdb.d` mechanism (no separate migration step to remember).
+
+```bash
+docker compose up -d
+```
+
+Confirm it came up with the expected tables:
+
+```bash
+docker compose exec -T db psql -U tamp -d tamp -c '\dt'
+```
+
+If port 5432 is already taken by something else on your machine (a common conflict when
+several projects run Postgres locally, and this repo hit exactly that with an unrelated
+`wattwise_postgres` container during development), pick a different host port without
+touching whatever already holds 5432:
+
+```bash
+DB_PORT=55432 docker compose up -d
+```
+
+**The schema and seed data only apply once, on a genuinely empty volume.** If you change a
+migration file after the first `up`, a plain restart will not re-run it. Remove the volume
+first:
+
+```bash
+docker compose down -v && docker compose up -d
+```
+
+### Environment switching: one set of values, not two codepaths
+
+The backend reads its database target entirely from environment variables, with the local
+Docker values as their defaults (`backend/src/main/resources/application.yml`):
+
+```bash
+DB_URL=jdbc:postgresql://localhost:5432/tamp
+DB_USERNAME=tamp
+DB_PASSWORD=tamp
+```
+
+Pointing the app at any other PostgreSQL (a different local port, or eventually a real
+deployed database) is one env var change, not a second configuration file:
+
+```bash
+DB_URL=jdbc:postgresql://localhost:55432/tamp mvn -f backend spring-boot:run
+```
+
+There is deliberately no `application-local.yml` / `application-prod.yml` split: the issue
+this setup exists to serve is "without maintaining two codepaths," and a second profile-
+specific file is exactly that.
+
+### Demo accounts
+
+Seeded by `db/seed/dev-seed.sql`, one per role, all sharing one password for a single line
+in this README rather than three:
+
+| Role | Email | Password |
+|---|---|---|
+| Freight Owner | `owner@tamp.example` | `TampDemo2026!` |
+| Transporter | `transporter@tamp.example` | `TampDemo2026!` |
+| Admin | `admin@tamp.example` | `TampDemo2026!` |
+
+The seed data walks a complete demo journey for these three accounts: an already-accepted
+match between the Freight Owner's delivered load and the Transporter's truck, its receipt,
+three tracking events, a rating from each party, one open dispute, and one pending
+compliance document, so the admin console and each role's dashboard have something real to
+show as soon as #10 onward add the screens to show it on. Login itself arrives with #9;
+until then, the password hashes are verifiable directly:
+
+```bash
+docker compose exec -T db psql -U tamp -d tamp -c \
+  "SELECT email, password_hash = crypt('TampDemo2026!', password_hash) AS password_matches FROM users;"
+```
 
 ### Backend (Java)
 
 ```bash
 cd backend
-mvn spring-boot:run          # starts on http://localhost:8080
+mvn spring-boot:run          # starts on http://localhost:8080, connects to the DB above
 mvn clean verify             # run tests + the 80% coverage gate
 ```
 

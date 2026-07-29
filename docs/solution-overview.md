@@ -19,7 +19,7 @@ Matching is **rule-based, not machine-learned**. Tracking, compliance verificati
 | Orchestrator / API | Java 21, Spring Boot, Maven | Spring Security is the intended auth and RBAC mechanism, so the web layer is chosen to match it rather than be rewritten later |
 | Matching service | Python 3.11+, FastAPI | Built-in request validation, generated OpenAPI docs, and a first-class test client — three separate add-ons in the alternatives considered |
 | Database | PostgreSQL 18 | Constraints carry the data-integrity rules the rubric grades, so the engine is chosen for what it enforces rather than for storage alone. Version 18 specifically, because the schema generates primary keys with the built-in `uuidv7()` function introduced in that release. See [ADR-2](adr/0002-data-model-and-database-architecture.md) |
-| Local runtime | Docker Compose | *To be confirmed when containerisation lands* |
+| Local runtime | Docker Compose | The database is dockerized (#7); the app containers themselves are added by #8 |
 
 ## Major components
 
@@ -67,3 +67,16 @@ string. `spring.jpa.hibernate.ddl-auto: validate` means the application refuses 
 entity does not match the schema in `db/migrations/`, which stays the schema's only author.
 See [ADR-2](adr/0002-data-model-and-database-architecture.md) for why generation was rejected
 and what it cost to map `CITEXT`, `JSONB` and `INET` columns correctly.
+
+### Local database
+
+`docker-compose.yml` at the repository root (#7) brings up a disposable PostgreSQL 18
+container, built from `db/Dockerfile`, which bakes `db/migrations/` and
+`db/seed/dev-seed.sql` into Postgres's own `docker-entrypoint-initdb.d` init mechanism at
+image build time. So the schema and a full walk-the-journey sample dataset apply
+automatically the first time the container starts: no separate migration or seeding step
+to run by hand, and nothing is bind-mounted into the git-tracked `db/` folder at runtime. The database target is entirely environment-
+variable driven (`DB_URL`/`DB_USERNAME`/`DB_PASSWORD`), with the local Docker values as
+their defaults, so pointing the app at a different database is one variable, not a second
+configuration file. See the README's Quick Start for the exact commands and demo
+credentials.
