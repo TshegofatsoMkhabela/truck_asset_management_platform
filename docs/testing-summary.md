@@ -33,6 +33,9 @@ the row says so rather than carrying a placeholder.
 | T-20 | The seed script populates all 9 seedable tables with a complete demo journey (one accepted match, receipt, 3 tracking events, 2 ratings, 1 dispute, 1 compliance document) | db (docker) | Row counts: users 3, loads 2, trucks 2, matches 1, receipts 1, tracking_events 3, ratings 2, disputes 1, compliance_documents 1 | As expected | ✅ Pass | #7 |
 | T-21 | Seeded password hashes are genuine, verifiable bcrypt (`pgcrypto`'s `crypt()`/`gen_salt('bf')`), not placeholders | db (docker) | `password_hash = crypt('TampDemo2026!', password_hash)` is `true` for all 3 demo accounts | As expected | ✅ Pass | #7 |
 | T-22 | **The application starts against the dockerized local DB using only the `DB_URL`/`DB_USERNAME`/`DB_PASSWORD` config flags, and a basic read/write against it succeeds** (issue #7 Minimum Integration Test) | backend + db (docker) | App boots, Hibernate schema validation passes, `/health` returns 200; a direct `INSERT`/`SELECT`/`DELETE` against the same live database succeeds while the app remains connected | As expected | ✅ Pass | #7 |
+| T-23 | **Clean clone → `docker compose up --build -d` → `/health` on both backend and matching-service return 200** (issue #8 Minimum Integration Test) | backend + matching-service + db (docker) | All 3 containers `Up` (db `Healthy`); `curl :8080/health` and `curl :8000/health` both 200 | As expected, after one fix (see below) | ✅ Pass | #8 |
+| T-24 | matching-service's generated API docs page loads after `docker compose up` | matching-service (docker) | `curl :8000/docs` → 200 | As expected | ✅ Pass | #8 |
+| T-25 | orchestrator's Swagger UI loads after `docker compose up` | backend (docker) | 200 once #9 merges | Currently 404: `springdoc` is not on `main` yet | ⏳ Pending #9 | #8 |
 
 ### Evidence for T-19–T-22
 
@@ -90,6 +93,58 @@ endpoint: no route in the application touches persistence yet (that begins at #1
 app boot and the direct database check were run concurrently against the *same* live
 container, which is what proves the config-flag connection and the read/write both hold
 at once, rather than proving two unrelated things.
+
+### Evidence for T-23–T-24
+
+Run from a genuinely clean state, existing images removed first, to prove the documented
+commands work from a fresh clone rather than only against an already-built cache:
+
+```
+$ docker rmi truck-matching-backend truck-matching-matching-service truck-matching-db
+$ cp .env.example .env
+$ docker compose up --build -d
+ Container truck-matching-db-1 Healthy
+ Container truck-matching-backend-1 Started
+ Container truck-matching-matching-service-1 Started
+
+$ curl http://localhost:8080/health
+{"status":"UP","service":"backend"} [HTTP 200]
+
+$ curl http://localhost:8000/health
+{"status":"UP","service":"matching-service"} [HTTP 200]
+
+$ curl -o /dev/null -w "%{http_code}\n" http://localhost:8000/docs
+200
+```
+
+One real defect was caught and fixed by this run, not by inspection: the first attempt
+had `matching-service` build successfully but crash on start with `Could not import
+module "matching_service.main"`. A plain (non-editable) `pip install .` copies whatever
+is in `src/` into site-packages at that point in the build, and at that point only an
+empty stub package existed (written to satisfy the build backend's package discovery
+before the real source is copied in a later layer). The later `COPY src ./src` updated
+the build context but not the already-installed copy. Fixed by switching to
+`pip install -e .` (editable install), which references `./src` instead of copying it,
+so the later `COPY` is what Python actually imports. See `matching-service/Dockerfile`.
+
+A second pass (`/simplify`) changed both services' port bindings from all-interfaces
+(`"8080:8080"`) to loopback-only (`"127.0.0.1:8080:8080"`), matching `db`'s own existing
+convention. T-23 was re-run after that change to confirm it didn't silently break the
+smoke test:
+
+```
+$ docker compose up -d
+$ curl http://localhost:8080/health
+{"status":"UP","service":"backend"} [HTTP 200]
+$ curl http://localhost:8000/health
+{"status":"UP","service":"matching-service"} [HTTP 200]
+```
+
+The first retry returned `HTTP 000` (connection refused) after only a 2-second wait —
+not a regression from the binding change, Spring Boot's own startup time, confirmed by
+retrying after 15 seconds and getting 200. Loopback and all-interfaces bindings both
+resolve `localhost` identically from the same machine; only reachability from other
+machines on the network differs, which nothing here tests or needs.
 
 ### A near-miss caught before commit, not after
 
