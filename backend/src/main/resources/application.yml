@@ -1,6 +1,17 @@
 spring:
   application:
     name: backend
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/tamp}
+    username: ${DB_USERNAME:tamp}
+    password: ${DB_PASSWORD:tamp}
+  jpa:
+    # validate, never update or create: Hibernate checks entities against db/migrations'
+    # schema and refuses to start on drift, but never generates or alters a table itself.
+    # The migrations are the schema's source of truth (ADR-2, ADR-3).
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
 
 server:
   port: ${SERVER_PORT:8080}
