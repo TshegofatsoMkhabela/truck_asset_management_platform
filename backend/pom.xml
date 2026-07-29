@@ -43,6 +43,24 @@
             </plugin>
 
             <!--
+                Tests tagged "e2e" need a live matching-service on the network, so
+                they are excluded from the default run. Without this, the per-service
+                `backend (Java)` CI job from #2 would depend on a running Python
+                process — destroying the per-service independence that is that
+                issue's whole point, and turning every backend failure into "which
+                service actually broke?".
+
+                Run them with `mvn verify -Pe2e` (see the e2e profile below).
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <excludedGroups>e2e</excludedGroups>
+                </configuration>
+            </plugin>
+
+            <!--
                 Line coverage is measured and gated at 80%. The gate is bound to
                 `verify` so it fails the build rather than merely reporting.
 
@@ -102,4 +120,34 @@
             </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <!--
+            `mvn verify -Pe2e` runs ONLY the e2e-tagged tests, against a
+            matching-service that must already be running (see the CI e2e job and
+            the README). Coverage checking is skipped here: this run executes a
+            single round-trip test and would report a meaningless percentage, and
+            failing the build on it would make the e2e job red for a reason that has
+            nothing to do with integration. The real coverage gate stays on the
+            default build, where it measures the full unit suite.
+        -->
+        <profile>
+            <id>e2e</id>
+            <properties>
+                <jacoco.skip>true</jacoco.skip>
+            </properties>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration>
+                            <groups>e2e</groups>
+                            <excludedGroups combine.self="override"/>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>
