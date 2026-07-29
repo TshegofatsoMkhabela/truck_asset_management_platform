@@ -72,6 +72,29 @@ Both services expose `/health` with the same `{"status","service"}` shape, so co
 healthchecks configure one contract rather than two. It is deliberately unauthenticated —
 a probe requiring credentials is useless to the tool that must poll it.
 
+## Cross-service call
+
+The orchestrator reaches matching-service over HTTP. With both services running:
+
+```bash
+curl http://localhost:8080/integration/ping
+# {"service":"matching-service","pong":true}
+```
+
+The response says `matching-service`, not `backend` — that is the point: it proves the
+orchestrator really made the hop rather than answering for itself.
+
+The target is configured by `MATCHING_SERVICE_URL` (default `http://localhost:8000`),
+so Docker Compose in #8 can repoint it at a container hostname without a code change:
+
+```bash
+MATCHING_SERVICE_URL=http://localhost:8010 mvn spring-boot:run
+```
+
+`/integration/ping` and matching-service's `/ping` are temporary scaffolding for #5 and
+are replaced by the real matching endpoint in #13. See
+[Testing Summary](docs/testing-summary.md) for how to run the end-to-end test.
+
 ## Documentation
 
 | Document | What it covers |
