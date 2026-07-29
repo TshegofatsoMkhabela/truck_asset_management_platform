@@ -40,7 +40,10 @@ jobs:
         with:
           name: coverage-backend
           path: backend/target/site/jacoco/
-          if-no-files-found: error
+          # `warn`, not `error`: this step runs on failure too, and a compile error
+          # produces no report directory. Erroring there would add a second, misleading
+          # red step on top of the real one. Both paths were verified locally.
+          if-no-files-found: warn
 
   matching-service:
     name: matching-service (Python)
@@ -53,6 +56,10 @@ jobs:
         with:
           python-version: '3.11'
           cache: pip
+          # Without this, the cache step searches for **/requirements.txt, finds
+          # nothing, and fails the job. This project declares dependencies in
+          # pyproject.toml, so the path has to be named explicitly.
+          cache-dependency-path: matching-service/pyproject.toml
 
       - name: Install dependencies
         working-directory: matching-service
@@ -72,4 +79,7 @@ jobs:
           path: |
             matching-service/htmlcov/
             matching-service/coverage.xml
-          if-no-files-found: error
+          # `warn`, not `error`: this step runs on failure too, and a compile error
+          # produces no report directory. Erroring there would add a second, misleading
+          # red step on top of the real one. Both paths were verified locally.
+          if-no-files-found: warn
