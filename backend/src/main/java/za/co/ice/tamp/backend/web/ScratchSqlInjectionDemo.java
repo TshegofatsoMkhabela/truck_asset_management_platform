@@ -2,9 +2,9 @@ package za.co.ice.tamp.backend.web;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Statement;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -20,11 +20,13 @@ class ScratchSqlInjectionDemo {
 
     @GetMapping("/scratch/sql-injection-demo")
     String lookup(@RequestParam String name) throws SQLException {
-        String sql = "SELECT * FROM users WHERE name = '" + name + "'";
+        String sql = "SELECT * FROM users WHERE name = ?";
         try (Connection c = DriverManager.getConnection("jdbc:postgresql://localhost/tamp");
-                Statement stmt = c.createStatement();
-                ResultSet rs = stmt.executeQuery(sql)) {
-            return rs.next() ? rs.getString(1) : "none";
+                PreparedStatement stmt = c.prepareStatement(sql)) {
+            stmt.setString(1, name);
+            try (ResultSet rs = stmt.executeQuery()) {
+                return rs.next() ? rs.getString(1) : "none";
+            }
         }
     }
 }
