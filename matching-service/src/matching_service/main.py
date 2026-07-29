@@ -24,3 +24,16 @@ def hello() -> dict[str, str]:
         "status": "ok",
         "message": "Hello from TAMP matching-service",
     }
+
+
+@app.get("/health")
+def health() -> dict[str, str]:
+    """Public liveness probe for monitoring tools and container healthchecks.
+
+    Deliberately unauthenticated: a probe that requires credentials is useless to
+    the orchestrator that needs to poll it.
+    """
+    return {
+        "status": "UP",
+        "service": "matching-service",
+    }

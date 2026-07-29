@@ -1,0 +1,101 @@
+name: CI
+
+# Two independent jobs, one per service. Deliberately no `paths:` filters and no
+# `needs:` between them: a required status check that gets skipped never reports,
+# and GitHub treats "expected but never reported" as pending forever, which leaves
+# the PR permanently unmergeable. Both jobs always running costs a couple of
+# minutes on doc-only PRs and keeps the merge gate honest.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# The workflow only reads the repository and uploads artifacts, so the token it is
+# handed needs no write access. The repository default is already `read`, but that
+# is a setting anyone can change; stating it here keeps the grant pinned to the job
+# rather than to a checkbox elsewhere.
+permissions:
+  contents: read
+
+# Cancel superseded runs: pushing three times to an open PR otherwise leaves three
+# pairs of jobs racing, and an older one can report after a newer one.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: backend (Java)
+    runs-on: ubuntu-latest
+    # A wedged dependency download otherwise burns the GitHub default of 360 minutes.
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: temurin
+          cache: maven
+
+      # `clean` is load-bearing, not habit. The JaCoCo agent appends to
+      # target/jacoco.exec by default, so a cached or reused target/ directory
+      # would gate against coverage data from an earlier run — a green check
+      # proving nothing. Verified locally: without clean, deleting a test left
+      # coverage reporting 100%.
+      - name: Build, test and check coverage
+        working-directory: backend
+        run: mvn --batch-mode clean verify
+
+      - name: Upload coverage report
+        if: '!cancelled()'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-backend
+          path: backend/target/site/jacoco/
+          # `warn`, not `error`: this step runs on failure too, and a compile error
+          # produces no report directory. Erroring there would add a second, misleading
+          # red step on top of the real one. Both paths were verified locally.
+          if-no-files-found: warn
+
+  matching-service:
+    name: matching-service (Python)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          # Without this, the cache step searches for **/requirements.txt, finds
+          # nothing, and fails the job. This project declares dependencies in
+          # pyproject.toml, so the path has to be named explicitly.
+          cache-dependency-path: matching-service/pyproject.toml
+
+      - name: Install dependencies
+        working-directory: matching-service
+        run: pip install -e ".[dev]"
+
+      # The 80% threshold comes from pyproject.toml, not a flag here, so this
+      # command behaves identically to a local `pytest` run.
+      - name: Test and check coverage
+        working-directory: matching-service
+        run: pytest
+
+      - name: Upload coverage report
+        if: '!cancelled()'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-matching-service
+          path: |
+            matching-service/htmlcov/
+            matching-service/coverage.xml
+          # `warn`, not `error`: this step runs on failure too, and a compile error
+          # produces no report directory. Erroring there would add a second, misleading
+          # red step on top of the real one. Both paths were verified locally.
+          if-no-files-found: warn
