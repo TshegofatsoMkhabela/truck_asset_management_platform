@@ -6,6 +6,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.http.ResponseEntity;
+import za.co.ice.tamp.backend.persistence.JpaTestBase;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.boot.test.context.SpringBootTest.WebEnvironment.RANDOM_PORT;
@@ -28,10 +29,17 @@ import static org.springframework.boot.test.context.SpringBootTest.WebEnvironmen
  * checking for a 200. A 200 alone would still pass if the orchestrator fabricated a
  * response without ever making the call; asserting on the *other* service's name is
  * what proves the hop actually happened.
+ *
+ * <p>Extends {@code JpaTestBase} rather than a bare {@code @SpringBootTest}, same as
+ * {@code HelloControllerTest}/{@code HealthControllerTest}: once the application had a real
+ * datasource (#6), every full-context test needs one to boot, and this one is no exception
+ * even though it never touches persistence itself. {@code webEnvironment = RANDOM_PORT} is
+ * redeclared here because this test needs a real embedded server for {@code TestRestTemplate}
+ * to call, which {@code JpaTestBase}'s own {@code @SpringBootTest} does not request.
  */
 @Tag("e2e")
 @SpringBootTest(webEnvironment = RANDOM_PORT)
-class CrossServiceIntegrationE2ETest {
+class CrossServiceIntegrationE2ETest extends JpaTestBase {
 
     @Autowired
     private TestRestTemplate restTemplate;
