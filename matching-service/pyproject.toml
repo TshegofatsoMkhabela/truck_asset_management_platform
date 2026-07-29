@@ -15,6 +15,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",
+    "pytest-cov>=5.0",
     "httpx>=0.27",
 ]
 
@@ -24,3 +25,13 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+# The 80% gate lives here rather than in the CI workflow so a local `pytest` run
+# behaves identically to CI — you find out you dropped below the bar before you
+# push, not after. `--cov-report=xml` feeds the artifact upload in CI.
+addopts = [
+    "--cov=matching_service",
+    "--cov-report=term-missing",
+    "--cov-report=xml",
+    "--cov-report=html",
+    "--cov-fail-under=80",
+]
