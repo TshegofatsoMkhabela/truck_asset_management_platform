@@ -24,3 +24,31 @@ def hello() -> dict[str, str]:
         "status": "ok",
         "message": "Hello from TAMP matching-service",
     }
+
+
+@app.get("/health")
+def health() -> dict[str, str]:
+    """Public liveness probe for monitoring tools and container healthchecks.
+
+    Deliberately unauthenticated: a probe that requires credentials is useless to
+    the orchestrator that needs to poll it.
+    """
+    return {
+        "status": "UP",
+        "service": "matching-service",
+    }
+
+
+@app.get("/ping")
+def ping() -> dict[str, object]:
+    """Fixed target for the orchestrator's cross-service integration call (#5).
+
+    Deliberately separate from ``/health``: this is a target for proving the
+    network round trip works, not a liveness contract. Keeping it apart means a
+    future change to ``/health`` (e.g. a database check in #7/#8) never breaks
+    the integration test for reasons unrelated to integration.
+    """
+    return {
+        "service": "matching-service",
+        "pong": True,
+    }

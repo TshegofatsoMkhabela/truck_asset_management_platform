@@ -1,0 +1,147 @@
+# Testing Summary
+
+The running record of what has actually been tested. Each issue adds its own rows
+as it lands, so this stays an accurate account of the work rather than something
+reconstructed from memory at the end.
+
+**Every number here is measured, not estimated.** If a figure isn't available yet,
+the row says so rather than carrying a placeholder.
+
+## Test cases
+
+| # | Test case | Service | Expected | Actual | Pass/Fail | Added by |
+|---|---|---|---|---|---|---|
+| T-01 | `GET /health` returns 200 with `status: UP` and `service: backend` | backend | 200, `{"status":"UP","service":"backend"}` | As expected | ✅ Pass | #2 |
+| T-02 | `GET /health` returns 200 with `status: UP` and `service: matching-service` | matching-service | 200, `{"status":"UP","service":"matching-service"}` | As expected | ✅ Pass | #2 |
+| T-03 | `GET /` returns the service greeting (context loads and routes) | backend | 200, `service: backend`, `status: ok` | As expected | ✅ Pass | #1 |
+| T-04 | `GET /` returns the service greeting (ASGI app assembles and routes) | matching-service | 200, `service: matching-service`, `status: ok` | As expected | ✅ Pass | #1 |
+| T-05 | `GET /ping` returns the fixed cross-service target payload | matching-service | 200, `{"service":"matching-service","pong":true}` | As expected | ✅ Pass | #5 |
+| T-06 | The client calls `GET {base}/ping` with the right verb and parses the response | backend | Request matches; body deserialises to `PingResponse` | As expected | ✅ Pass | #5 |
+| T-07 | **Orchestrator reaches matching-service over a real network call** | both (e2e) | 200, body `service` is `matching-service`, `pong` true | As expected | ✅ Pass | #5 |
+| T-08 | All 11 migrations apply in order to an empty PostgreSQL 18 database | backend (db) | Every table created, no error | As expected | ✅ Pass | #6 |
+| T-09 | `users` constraints: case-insensitive unique email, role and compliance CHECKs, blank name, time-ordered UUID keys (6 tests) | backend (db) | Each invalid write rejected by its named constraint | As expected | ✅ Pass | #6 |
+| T-10 | **A user, a load and a truck persist with intact foreign keys** (issue #6 Minimum Integration Test) | backend (db) | Rows stored, `owner_id` and `transporter_id` read back correctly | As expected | ✅ Pass | #6 |
+| T-11 | `loads` and `trucks` constraints: dangling owner, non-positive weight/capacity/volume, backwards time windows, unknown vehicle type, status defaults (10 tests) | backend (db) | Each invalid write rejected by its named constraint | As expected | ✅ Pass | #6 |
+| T-12 | `matches` and `receipts`: dangling load/truck, duplicate match pair, decided match with no timestamp, second receipt for one match, distinct contract IDs, queryable score/reasons (8 tests) | backend (db) | Each invalid write rejected; reasons readable as JSON | As expected | ✅ Pass | #6 |
+| T-13 | `ratings` and `audit_logs`: score range, one rating per rater per match, self-rating, and audit rows surviving deletion of what they describe plus rejecting UPDATE/DELETE (8 tests) | backend (db) | Invalid ratings rejected; audit entries immutable and durable | As expected | ✅ Pass | #6 |
+| T-14 | `tracking_events` and `disputes`: impossible coordinates, event with neither position nor status, status-only event accepted, user-level flags, resolution consistency (10 tests) | backend (db) | Each invalid write rejected by its named constraint | As expected | ✅ Pass | #6 |
+| T-15 | `compliance_documents`: unknown document type, dangling user, pending default, review consistency (6 tests) | backend (db) | Each invalid write rejected; reviewer and timestamp recorded on approval | As expected | ✅ Pass | #6 |
+| T-16 | `updated_at` advances on modification and equals `created_at` on insert (3 tests) | backend (db) | `updated_at > created_at` after an UPDATE | As expected | ✅ Pass | #6 |
+
+T-08 to T-16 run against a real PostgreSQL 18 container started by **Testcontainers**, a
+library that starts and disposes of Docker containers around a test run, rather than an
+in-memory substitute. These tests exist to prove *constraint behaviour*, and in-memory
+databases only approximate PostgreSQL's constraint semantics, so a green result against
+one would be evidence about the wrong database. They need a running Docker daemon.
+
+Each row above assumes on the **named** constraint, not merely that an exception was
+thrown. During #6 this mattered: `relation "loads" does not exist` is itself a
+`SQLException`, so seven tests asserting only the exception type would have passed
+against a database with no tables in it at all.
+
+Each health test asserts the **`service`** key as well as `status`. Both services
+answer `/health` with an identical shape, so a misconfigured port mapping could route
+a probe to the wrong service and still return `{"status":"UP"}`. The service name is
+what distinguishes them.
+
+## Coverage
+
+Line coverage, gated at **80% per service**. CI fails the job below that bar.
+
+Coverage is measured by **JaCoCo** — a Java agent that attaches to the test run and
+records which lines actually executed — and **`pytest-cov`**, its Python counterpart,
+built on the `coverage.py` library. Both report *line* coverage: the percentage of
+executable lines a test run touched at least once.
+
+| Service | Tool | Line coverage | Gate | Status |
+|---|---|---|---|---|
+| backend | JaCoCo 0.8.12 | **95%** (19/20 lines) | 80% | ✅ Pass |
+| matching-service | pytest-cov | **100%** (8/8 lines) | 80% | ✅ Pass |
+
+Reports are uploaded as CI artifacts (`coverage-backend`, `coverage-matching-service`)
+on every run, including failures — the number matters most when the gate trips.
+
+### What is excluded, and why
+
+`BackendApplication` is excluded from JaCoCo measurement. Its only statement is the
+`SpringApplication.run` bootstrap, which tests never invoke — the Spring test context
+loads the class directly rather than calling `main()`. Covering it would mean writing
+a test that calls `main()` purely to move the number, which is the coverage theatre the
+gate exists to prevent. The exclusion names that one class rather than a package glob,
+so any real logic added elsewhere is still measured.
+
+Nothing is excluded on the Python side.
+
+The backend figure was recorded as 100% (4/4 lines) when #2 landed. It is now 95% (19/20),
+and the change is not a regression introduced by #6, which adds migrations and tests but no
+main-source code. The one uncovered line is the body of `IntegrationController`'s
+`/integration/ping` handler, added by #5 and reachable only through T-07, which is tagged
+`e2e` and therefore excluded from the default gated run. The measurement was simply not
+retaken after #5 merged. It is retaken here, from `target/site/jacoco/jacoco.csv`.
+
+That endpoint is temporary and is replaced by the real matching endpoint in #13, so the
+line is expected to disappear rather than be covered.
+
+## Known defects
+
+| # | Defect | Severity | Status |
+|---|---|---|---|
+| *(none)* | | | |
+
+## How to reproduce
+
+Backend:
+
+```bash
+cd backend
+mvn clean verify
+```
+
+`clean` is required, not cosmetic. The JaCoCo agent appends to `target/jacoco.exec`
+by default, so a reused `target/` directory measures coverage accumulated across
+earlier runs — which can report a passing percentage for code whose tests were
+deleted. This was observed during #2 before the gate was corrected.
+
+Matching service:
+
+```bash
+cd matching-service
+pytest
+```
+
+The 80% threshold lives in `pyproject.toml`, so a local run gates exactly as CI does.
+
+### The cross-service end-to-end test (T-07)
+
+T-07 needs **both** services running, so it is tagged `e2e` and excluded from the
+default Maven run. Without that exclusion the `backend (Java)` CI job would depend on
+a live Python process, destroying the per-service independence that #2 exists to
+provide — a backend failure would no longer tell you which service actually broke.
+
+```bash
+# terminal 1
+cd matching-service && uvicorn matching_service.main:app --port 8000
+
+# terminal 2
+cd backend && mvn verify -Pe2e
+```
+
+Expected: `Tests run: 1, Failures: 0` / `BUILD SUCCESS`.
+
+If port 8000 is already in use — likely when several people or agents work on this
+machine at once — start the service on another port and point the orchestrator at it:
+
+```bash
+cd matching-service && uvicorn matching_service.main:app --port 8010
+cd backend && MATCHING_SERVICE_URL=http://localhost:8010 mvn verify -Pe2e
+```
+
+This is not hypothetical: during #5 a stale copy of matching-service on port 8000
+silently served the test, which failed with a confusing "route not found" until the
+port owner was identified. Separate working directories isolate files and git; they
+do not isolate ports.
+
+The `e2e` profile also skips the coverage gate. It runs a single round-trip test, so
+its coverage figure would be meaningless, and failing the build on it would turn the
+e2e job red for a reason unrelated to integration. The real gate stays on the default
+build, where it measures the full unit suite.
