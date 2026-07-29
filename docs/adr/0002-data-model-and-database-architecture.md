@@ -151,6 +151,48 @@ with no tables at all. This was observed during development, where seven such te
 gone green against an empty schema had they not asserted on the constraint name.
 **Cost accepted:** slightly noisier DDL.
 
+### Feature code reads and writes through JPA; the schema stays owned by SQL
+
+**Chosen:** Spring Data JPA (a library that maps database rows to Java objects, so application
+code calls repository methods instead of writing SQL) for every repository and entity, paired
+with `spring.jpa.hibernate.ddl-auto: validate` **to achieve** feature code that never contains a
+hand-written SQL string, while the eleven migration files above stay the schema's only author.
+**Rejected:** letting Hibernate generate the schema from the entities (`ddl-auto: update` or
+`create`), which is the more common pairing when a project uses JPA at all.
+**Why generation lost here:** Hibernate cannot express most of what this schema is made of. It
+has no way to produce a `CHECK` constraint, the multi-column decision-consistency rules, the
+append-only trigger on `audit_logs`, or the `uuidv7()`/`contract_id` defaults. Section 8 of the
+brief grades "reliable state transitions" as its own criterion; those constraints are that
+criterion. Generating the schema would trade a graded strength for one fewer file to edit.
+**Cost accepted:** a column change is two edits, the entity and the migration, and `validate`
+means every full-context test needs a real, migrated database to boot against, including tests
+from #1/#2 that touch no persistence code themselves.
+**Honesty note, on convention:** the common pairing for `ddl-auto: validate` is a migration tool
+(Flyway/Liquibase) applying the schema first, with validation as the safety check on top. This
+project pairs `validate` with hand-written SQL and no tool instead, for the same reason the
+migration-tool decision above was made: one contributor, one environment, nothing deployed.
+That is a deliberate divergence from the common shape, not the common shape itself, and it
+inherits that decision's expiry: adopt a tool the first time the schema changes after something
+is deployed.
+
+**Three column mappings only worked once actually run against the real database**, not as
+reasoned up front. Worth recording because two of them contradict claims made earlier in this
+document:
+- **CITEXT** (`users.email`) needs `@Column(columnDefinition = "citext")` for Hibernate's schema
+  *validator*, even though a plain `String` binds and reads correctly at runtime with no special
+  handling. This directly contradicts this ADR's earlier assumption that CITEXT "needs no special
+  Java mapping": that was true for JDBC binding and false for validation, and running the
+  validator (the entire point of choosing it) is what caught the error.
+- **CITEXT equality via a Spring Data derived query** (`findByEmail`) does not reliably use the
+  case-insensitive operator once the JDBC driver types the parameter as `VARCHAR`. The read now
+  uses an explicit `lower(u.email) = lower(:email)` comparison instead of relying on the column
+  type alone. The database's unique index still enforces case-insensitive uniqueness for writes
+  regardless of this; only the read needed the explicit form.
+- **INET** (`receipts.ip_address`) needs *both* an `AttributeConverter` wrapping the value in a
+  `PGobject` tagged `inet` (PostgreSQL has no implicit cast from `varchar` to `inet`) *and*
+  `@JdbcTypeCode(SqlTypes.OTHER)` on the field (without it, Hibernate binds the converted value
+  with an internal type code the driver does not recognise). Neither alone was sufficient.
+
 ## Extensibility
 
 Only the two directions the project's scope document actually supports are covered here.
@@ -182,3 +224,8 @@ new metrics are new queries: #17 can add a metric without a migration.
   event, never by editing the original. This is intended and should not be "fixed."
 - The role-ownership gap and the absence of proximity matching are recorded in
   `known-limitations.md` rather than left to be discovered.
+- Feature issues (#9 onward) implement persistence through the entities and repositories in
+  `backend/src/main/java/.../persistence`, never through a hand-written SQL string. Adding a
+  column requires editing both the entity and a new migration file; editing only one fails the
+  application at startup via schema validation, which is the intended behaviour, not a bug to
+  route around.

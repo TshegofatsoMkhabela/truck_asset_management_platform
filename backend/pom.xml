@@ -31,18 +31,28 @@
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
 
+        <!-- Feature code reads and writes through entities and repositories, never SQL
+             strings. The schema itself stays owned by db/migrations (#6); ddl-auto is set
+             to validate, not update or create, so Hibernate checks the mapping against that
+             schema rather than generating one of its own. See ADR-3. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
+
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
         </dependency>
 
-        <!-- Schema constraints are tested against the same PostgreSQL the app runs on,
-             so a passing test is evidence about the real database, not an approximation. -->
+        <!-- Default (compile) scope, not test-only: the running application needs this driver
+             to reach PostgreSQL, InetAddressConverter references org.postgresql.util.PGobject
+             directly from main code, and the schema tests reuse the same dependency rather than
+             a second copy. -->
         <dependency>
             <groupId>org.postgresql</groupId>
             <artifactId>postgresql</artifactId>
-            <scope>test</scope>
         </dependency>
 
         <dependency>

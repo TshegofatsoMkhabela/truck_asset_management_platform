@@ -37,7 +37,7 @@ Recorded as ADRs in [`docs/adr/`](adr/) as they are made.
 | ADR | Decision | Issue |
 |---|---|---|
 | [ADR-1](adr/0001-local-secret-scanning.md) | Secrets are blocked locally at commit time by a Gitleaks pre-commit hook rather than only being caught server-side | #4 |
-| [ADR-2](adr/0002-data-model-and-database-architecture.md) | Data model and database architecture: time-ordered UUID keys, `CHECK` constraints over native enums, numbered SQL migrations with no migration tool, and an append-only audit log with no foreign keys | #6 |
+| [ADR-2](adr/0002-data-model-and-database-architecture.md) | Data model and database architecture: time-ordered UUID keys, `CHECK` constraints over native enums, numbered SQL migrations with no migration tool, an append-only audit log with no foreign keys, and JPA for feature-code access with the schema still owned by SQL | #6 |
 
 ### Database entities
 
@@ -58,3 +58,12 @@ compliance-document metadata required by section 2.2.
 | `audit_logs` | FR-12 | Append-only, no foreign keys, survives what it describes |
 
 FR-11's platform metrics are derived by query rather than stored, so there is no analytics table.
+
+### Persistence layer
+
+Feature code reads and writes through Spring Data JPA entities and repositories under
+`backend/src/main/java/za/co/ice/tamp/backend/persistence/`, never through a hand-written SQL
+string. `spring.jpa.hibernate.ddl-auto: validate` means the application refuses to start if an
+entity does not match the schema in `db/migrations/`, which stays the schema's only author.
+See [ADR-2](adr/0002-data-model-and-database-architecture.md) for why generation was rejected
+and what it cost to map `CITEXT`, `JSONB` and `INET` columns correctly.

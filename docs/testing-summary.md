@@ -27,12 +27,21 @@ the row says so rather than carrying a placeholder.
 | T-14 | `tracking_events` and `disputes`: impossible coordinates, event with neither position nor status, status-only event accepted, user-level flags, resolution consistency (10 tests) | backend (db) | Each invalid write rejected by its named constraint | As expected | ✅ Pass | #6 |
 | T-15 | `compliance_documents`: unknown document type, dangling user, pending default, review consistency (6 tests) | backend (db) | Each invalid write rejected; reviewer and timestamp recorded on approval | As expected | ✅ Pass | #6 |
 | T-16 | `updated_at` advances on modification and equals `created_at` on insert (3 tests) | backend (db) | `updated_at > created_at` after an UPDATE | As expected | ✅ Pass | #6 |
+| T-17 | `spring.jpa.hibernate.ddl-auto: validate` rejects a deliberately mismatched entity | backend (persistence) | Application context fails to start | As expected | ✅ Pass | #6 |
+| T-18 | Every one of the 10 JPA entities round-trips through its repository: generated id, `JSONB` (`matches.reasons`, `audit_logs.details`), `CITEXT` (case-insensitive `findByEmail`), `INET` (`receipts.ip_address`), and each derived query method (12 tests) | backend (persistence) | Save then read-back matches; derived queries return only the matching rows | As expected | ✅ Pass | #6 |
 
-T-08 to T-16 run against a real PostgreSQL 18 container started by **Testcontainers**, a
+T-08 to T-18 run against a real PostgreSQL 18 container started by **Testcontainers**, a
 library that starts and disposes of Docker containers around a test run, rather than an
 in-memory substitute. These tests exist to prove *constraint behaviour*, and in-memory
 databases only approximate PostgreSQL's constraint semantics, so a green result against
 one would be evidence about the wrong database. They need a running Docker daemon.
+
+T-17 and T-18 additionally prove the JPA persistence layer (#6) never diverges from that
+schema: `ddl-auto: validate` boots the real application against the migrated container, and
+because the application now has a real datasource, every other full-context test in the
+module (including #1/#2's `HelloControllerTest` and `HealthControllerTest`) also boots
+against this same container rather than a separate one, so there is exactly one schema the
+whole test suite is honest about.
 
 Each row above assumes on the **named** constraint, not merely that an exception was
 thrown. During #6 this mattered: `relation "loads" does not exist` is itself a
@@ -55,7 +64,7 @@ executable lines a test run touched at least once.
 
 | Service | Tool | Line coverage | Gate | Status |
 |---|---|---|---|---|
-| backend | JaCoCo 0.8.12 | **95%** (19/20 lines) | 80% | ✅ Pass |
+| backend | JaCoCo 0.8.12 | **93.5%** (200/214 lines) | 80% | ✅ Pass |
 | matching-service | pytest-cov | **100%** (8/8 lines) | 80% | ✅ Pass |
 
 Reports are uploaded as CI artifacts (`coverage-backend`, `coverage-matching-service`)
@@ -72,15 +81,16 @@ so any real logic added elsewhere is still measured.
 
 Nothing is excluded on the Python side.
 
-The backend figure was recorded as 100% (4/4 lines) when #2 landed. It is now 95% (19/20),
-and the change is not a regression introduced by #6, which adds migrations and tests but no
-main-source code. The one uncovered line is the body of `IntegrationController`'s
-`/integration/ping` handler, added by #5 and reachable only through T-07, which is tagged
-`e2e` and therefore excluded from the default gated run. The measurement was simply not
-retaken after #5 merged. It is retaken here, from `target/site/jacoco/jacoco.csv`.
-
-That endpoint is temporary and is replaced by the real matching endpoint in #13, so the
-line is expected to disappear rather than be covered.
+The backend figure was recorded as 100% (4/4 lines) when #2 landed, then 95% (19/20) once
+#6's schema tests were measured against the merged state of #2/#4/#5 (the drop was
+`IntegrationController`'s `/integration/ping` handler, reachable only through the e2e-tagged
+T-07). It is now **93.5% (200/214)**, remeasured again after #6 grew to include the JPA persistence
+layer: 10 entities, 10 repositories, and their accessor and mapping code. 14 lines remain
+uncovered per `target/site/jacoco/jacoco.csv`: 1 in `IntegrationController` (the same e2e-only
+line as above), 3 in `InetAddressConverter`, and 1–4 each in `Dispute`, `ComplianceDocument`,
+`Truck`, `User`, `Match` and `Load` — small enough per class that no single test is missing,
+this is the ordinary residue of entity accessors no test path happens to touch. All figures
+here are taken from the JaCoCo CSV directly, not estimated.
 
 ## Known defects
 
