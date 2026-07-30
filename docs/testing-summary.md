@@ -229,7 +229,7 @@ executable lines a test run touched at least once.
 
 | Service | Tool | Line coverage | Gate | Status |
 |---|---|---|---|---|
-| backend | JaCoCo 0.8.12 | **96%** (1919/1992 instructions) | 80% | ✅ Pass |
+| backend | JaCoCo 0.8.12 | **97.5%** (503/516 lines) | 80% | ✅ Pass |
 | matching-service | pytest-cov | **100%** (165/165 lines) | 80% | ✅ Pass |
 
 Reports are uploaded as CI artifacts (`coverage-backend`, `coverage-matching-service`)
@@ -269,7 +269,7 @@ It reached 91.2% (936/1026), remeasured after merging #10's user/profile work
 The percentage moved because the two feature sets landed independently and the bundle
 measured here is neither one alone; `mvn clean verify` was rerun against the merged tree
 rather than assuming the two issues' figures would simply add up. It is now
-**96% (1919/1992 instructions)**, remeasured after merging #11's load postings, #12's trucks
+**97.5% (503/516 lines)**, remeasured after merging #11's load postings, #12's trucks
 endpoint, #15's tracking endpoints and #17's admin console into that same tree.
 
 ## Known defects
