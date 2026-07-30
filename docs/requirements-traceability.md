@@ -13,7 +13,7 @@ Maps each functional requirement to the code that implements it. Every row start
 | FR-05 | Rule-based matching using compatibility, location and availability | Must | `matching_service.rules.find_eligible_matches` (matching-service), `POST /loads/{loadId}/matches` (`MatchController`, orchestrator) | `test_rules.py` (6 tests), `test_match.py` (2 tests), `MatchingServiceClientTest`, `MatchingCoordinatorTest` (2 tests), `MatchingTimingE2ETest` | Complete |
 | FR-06 | Users can accept or reject a match and the decision is logged | Must | — | — | Not implemented |
 | FR-07 | Accepted match produces a digital confirmation receipt | Must | — | — | Not implemented |
-| FR-08 | Trip tracking simulated using mock coordinates or status progression | Must | — | — | Not implemented |
+| FR-08 | Trip tracking simulated using mock coordinates or status progression | Must | `POST /matches/{matchId}/tracking`, `GET /matches/{matchId}/tracking` (`TrackingController`, #15) | `TrackingControllerTest.advancesStatusAndReadsItBackInOrder`, `acceptsAPositionOnlyEvent`, `rejectsAnEventWithNeitherPositionNorStatus`, `refusesTrackingForAMatchThatIsNotAccepted`, `returns404ForAnUnknownMatch` | Complete |
 | FR-09 | Parties can rate/review one another after completion | Should | POST/GET /matches/{id}/ratings, GET /users/{id}/ratings (`RatingController`, #16) | `RatingControllerTest.submitsRatingForCompletedMatch`, `listRatingsForMatch` | Complete |
 | FR-10 | Admin can manage users, compliance status and flagged/disputed items | Must | — | — | Not implemented |
 | FR-11 | Admin can view basic platform metrics | Must | — | — | Not implemented |
