@@ -89,6 +89,10 @@ public class Dispute {
         return resolvedBy;
     }
 
+    public OffsetDateTime getCreatedAt() {
+        return createdAt;
+    }
+
     public OffsetDateTime getResolvedAt() {
         return resolvedAt;
     }
