@@ -80,3 +80,20 @@ variable driven (`DB_URL`/`DB_USERNAME`/`DB_PASSWORD`), with the local Docker va
 their defaults, so pointing the app at a different database is one variable, not a second
 configuration file. See the README's Quick Start for the exact commands and demo
 credentials.
+
+### Matching (FR-05)
+
+`matching_service/rules.py` applies the brief section 3.1 rules (capacity, cargo/vehicle
+compatibility, availability overlap, city-level location) as pure functions with no HTTP or
+persistence dependency, so the rules are testable without a running server. `POST /match`
+exposes it over HTTP; the orchestrator's `MatchingCoordinator` fetches a load and its
+available trucks, calls that endpoint, persists the eligible results, and writes an audit
+event, all behind `POST /loads/{loadId}/matches`. No role check yet: see
+[Known Limitations](known-limitations.md) for the deferral to #9.
+
+### API documentation
+
+`springdoc-openapi-starter-webmvc-ui` (added #13) exposes `/swagger-ui/index.html` and
+`/v3/api-docs` with zero configuration beyond the dependency itself, satisfying brief
+section 7's OpenAPI submission requirement and section 2.2's stated demonstration vehicle.
+Every feature issue from #10 onward inherits this rather than needing its own setup.
