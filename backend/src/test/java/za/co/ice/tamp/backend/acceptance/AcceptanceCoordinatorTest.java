@@ -14,9 +14,10 @@ import za.co.ice.tamp.backend.persistence.entity.Match;
 import za.co.ice.tamp.backend.persistence.entity.User;
 import za.co.ice.tamp.backend.persistence.repository.AuditLogRepository;
 import za.co.ice.tamp.backend.persistence.repository.MatchRepository;
+import za.co.ice.tamp.backend.web.MatchNotFoundException;
 
 /**
- * Proves FR-06: a proposed match can be accepted or rejected, the decision is persisted with
+ * Proves a proposed match can be accepted or rejected, the decision is persisted with
  * its actor, and the commitment is recorded in the audit trail.
  *
  * <p>Emails carry an {@code ac-} prefix so they cannot collide with another test class's, for

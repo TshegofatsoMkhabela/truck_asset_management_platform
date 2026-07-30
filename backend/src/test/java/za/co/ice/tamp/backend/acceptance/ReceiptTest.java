@@ -19,7 +19,7 @@ import za.co.ice.tamp.backend.persistence.entity.User;
 import za.co.ice.tamp.backend.persistence.repository.ReceiptRepository;
 
 /**
- * FR-07: an accepted match produces a retrievable digital confirmation receipt.
+ * An accepted match produces a retrievable digital confirmation receipt.
  *
  * <p>Carries #14's Minimum Integration Test: accept a match via the API, then fetch the
  * resulting receipt and confirm it names the right match and actor.
@@ -63,8 +63,8 @@ class ReceiptTest extends JpaTestBase {
 
     @Test
     void rejectingAMatchProducesNoReceipt() throws Exception {
-        // FR-07 is specifically "accepted match produces a receipt". The schema permits a
-        // REJECTED receipt so #16's disputes can reference one later, but issuing a
+        // The requirement is specifically "accepted match produces a receipt". The schema
+        // permits a REJECTED receipt so #16's disputes can reference one later, but issuing a
         // "confirmation" for a refusal would misrepresent what happened.
         User owner = fixture.owner("rc-owner2@example.com");
         Match match = fixture.proposedMatch(owner, "rc-transporter2@example.com");

@@ -12,8 +12,10 @@ import za.co.ice.tamp.backend.persistence.entity.MatchStatus;
  * carries its own CHECK constraint, but reaching it turns a caller typo into a 500 with a
  * Postgres error string attached, instead of a 400 naming the field.
  *
- * <p>{@code actorId} is in the body because there is no authenticated caller to read it from
- * until #9 lands, matching what #13 already does for {@code requestedBy}.
+ * <p>{@code actorId} is optional here, not {@code @NotNull}: {@link AcceptanceController}
+ * overrides it with the caller's JWT id when a real {@code Authorization: Bearer} token is
+ * presented, and rejects the request with a clear 400 if neither a token nor this field
+ * supplied one.
  */
 public record DecisionRequest(
         @NotNull
@@ -22,5 +24,5 @@ public record DecisionRequest(
                 message = "decision must be ACCEPTED or REJECTED")
         String decision,
 
-        @NotNull UUID actorId) {
+        UUID actorId) {
 }

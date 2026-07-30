@@ -38,6 +38,7 @@ Recorded as ADRs in [`docs/adr/`](adr/) as they are made.
 |---|---|---|
 | [ADR-1](adr/0001-local-secret-scanning.md) | Secrets are blocked locally at commit time by a Gitleaks pre-commit hook rather than only being caught server-side | #4 |
 | [ADR-2](adr/0002-data-model-and-database-architecture.md) | Data model and database architecture: time-ordered UUID keys, `CHECK` constraints over native enums, numbered SQL migrations with no migration tool, an append-only audit log with no foreign keys, and JPA for feature-code access with the schema still owned by SQL | #6 |
+| [ADR-3](adr/0003-authentication-and-rbac.md) | Authentication and RBAC: Spring Security plus a stateless JWT rather than a hand-rolled scheme, deny-by-default filter chain, one shared error shape across `@RestControllerAdvice` and the Security layer's own handlers | #9 |
 
 ### Database entities
 
@@ -88,8 +89,63 @@ compatibility, availability overlap, city-level location) as pure functions with
 persistence dependency, so the rules are testable without a running server. `POST /match`
 exposes it over HTTP; the orchestrator's `MatchingCoordinator` fetches a load and its
 available trucks, calls that endpoint, persists the eligible results, and writes an audit
-event, all behind `POST /loads/{loadId}/matches`. No role check yet: see
-[Known Limitations](known-limitations.md) for the deferral to #9.
+event, all behind `POST /loads/{loadId}/matches`.
+
+### Acceptance and receipts (FR-06, FR-07)
+
+`AcceptanceCoordinator.decide(...)` turns a proposed match into a decided one exactly once:
+`matches.status` moves to `ACCEPTED` or `REJECTED` with the deciding actor and timestamp, a
+receipt is issued on acceptance with a generated `contractId` prefixed `TAMP-`, and an audit
+event is written, all in one transaction. `AcceptanceController` exposes this behind
+`POST /matches/{matchId}/decision` and `GET /matches/{matchId}/receipt`. A second decision on
+an already-decided match returns 409 rather than overwriting the first.
+
+### Tracking (FR-08)
+
+`TrackingController` appends mock status and/or coordinate events to an `ACCEPTED` match's
+trip history behind `POST /matches/{matchId}/tracking`, read back oldest-first via the same
+path's `GET`. Coordinates and statuses are synthetic, per the brief's exclusion of live
+GPS/telematics for this track. See [Known Limitations](known-limitations.md): there is
+currently no check against posting stages out of order.
+
+### Ratings and disputes (FR-09, FR-10)
+
+`RatingController` records a one-to-five score and optional comment behind
+`POST /matches/{matchId}/ratings`, readable back per match or per user.
+`DisputeController` lets any party flag a match behind `POST /matches/{matchId}/disputes`,
+writing a `DISPUTE_RAISED` audit event; `GET /disputes` lists the open queue for admin review.
+
+### Admin console (FR-10, FR-11, FR-12)
+
+`AdminController` exposes read-only oversight: `GET /admin/metrics` for basic platform counts,
+`GET /admin/users` for every user with role and compliance status, `GET /admin/audit-logs` for
+the full append-only trail, and `GET /admin/disputes` for the open-flags queue. Restricted to
+a caller whose stored role is ADMIN, looked up by a caller-supplied `adminId`, not yet read
+from an authenticated principal; see the authentication section below.
+
+### Authentication (FR-01)
+
+`AuthController` exposes `POST /auth/register` and `POST /auth/login`, the latter issuing a
+signed JWT (JSON Web Token, verifiable from its signature alone with no database lookup)
+naming the user's id and role, verified on every request by `JwtAuthenticationFilter`. This
+half of FR-01 works. Every business controller now reads that identity through `CurrentUser`
+and uses it in place of its caller-supplied id field (`ownerId`, `transporterId`, `actorId`,
+and so on) whenever a real token is presented, which is what lets a Swagger UI demo log in
+once and stop retyping ids at every step. The other half, role-based access control actually
+requiring a token, does not yet exist: `SecurityConfig` currently `permitAll()`s every
+business endpoint, so a caller presenting no token still gets through by supplying the id
+directly, exactly as before. See [Known Limitations](known-limitations.md) for the full
+accounting of what this leaves open, and [ADR 0003](adr/0003-authentication-and-rbac.md) for the design the enforcement
+half was meant to follow.
+
+### Demo journey (issue #18)
+
+`DemoJourneyE2ETest` is the project's single top-level integration proof: registration
+through to the admin view, run continuously over real HTTP against a real matching-service
+round trip, not a persisted-directly match. `docs/demo-guide.md` is the same journey written
+as a Swagger UI click-through for a non-developer to present live. Both were verified against
+this repository's actual behaviour, including the authentication gap above, rather than
+against what earlier issues predicted #9 would eventually close.
 
 ### API documentation
 
