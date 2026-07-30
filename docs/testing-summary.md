@@ -15,9 +15,9 @@ the row says so rather than carrying a placeholder.
 | T-02 | `GET /health` returns 200 with `status: UP` and `service: matching-service` | matching-service | 200, `{"status":"UP","service":"matching-service"}` | As expected | ✅ Pass | #2 |
 | T-03 | `GET /` returns the service greeting (context loads and routes) | backend | 200, `service: backend`, `status: ok` | As expected | ✅ Pass | #1 |
 | T-04 | `GET /` returns the service greeting (ASGI app assembles and routes) | matching-service | 200, `service: matching-service`, `status: ok` | As expected | ✅ Pass | #1 |
-| T-05 | `GET /ping` returns the fixed cross-service target payload | matching-service | 200, `{"service":"matching-service","pong":true}` | As expected | ✅ Pass | #5 |
-| T-06 | The client calls `GET {base}/ping` with the right verb and parses the response | backend | Request matches; body deserialises to `PingResponse` | As expected | ✅ Pass | #5 |
-| T-07 | **Orchestrator reaches matching-service over a real network call** | both (e2e) | 200, body `service` is `matching-service`, `pong` true | As expected | ✅ Pass | #5 |
+| T-05 | ~~`GET /ping` returns the fixed cross-service target payload~~ | matching-service | n/a | Removed (#13): `/ping` and its caller (`IntegrationController`) existed only as a target for T-07's dummy round trip, superseded by real matching (see T-36) | ➖ Superseded | #5 |
+| T-06 | ~~The client calls `GET {base}/ping` with the right verb and parses the response~~ | backend | n/a | Removed (#13): `MatchingServiceClient.ping()` was replaced by `requestMatches(...)`, see T-25 | ➖ Superseded | #5 |
+| T-07 | ~~Orchestrator reaches matching-service over a real network call~~ | both (e2e) | n/a | Removed (#13): superseded by T-36, the real matching round trip against #7's seeded data | ➖ Superseded | #5 |
 | T-08 | All 11 migrations apply in order to an empty PostgreSQL 18 database | backend (db) | Every table created, no error | As expected | ✅ Pass | #6 |
 | T-09 | `users` constraints: case-insensitive unique email, role and compliance CHECKs, blank name, time-ordered UUID keys (6 tests) | backend (db) | Each invalid write rejected by its named constraint | As expected | ✅ Pass | #6 |
 | T-10 | **A user, a load and a truck persist with intact foreign keys** (issue #6 Minimum Integration Test) | backend (db) | Rows stored, `owner_id` and `transporter_id` read back correctly | As expected | ✅ Pass | #6 |
@@ -35,13 +35,18 @@ the row says so rather than carrying a placeholder.
 | T-22 | **The application starts against the dockerized local DB using only the `DB_URL`/`DB_USERNAME`/`DB_PASSWORD` config flags, and a basic read/write against it succeeds** (issue #7 Minimum Integration Test) | backend + db (docker) | App boots, Hibernate schema validation passes, `/health` returns 200; a direct `INSERT`/`SELECT`/`DELETE` against the same live database succeeds while the app remains connected | As expected | ✅ Pass | #7 |
 | T-23 | **Clean clone → `docker compose up --build -d` → `/health` on both backend and matching-service return 200** (issue #8 Minimum Integration Test) | backend + matching-service + db (docker) | All 3 containers `Up` (db `Healthy`); `curl :8080/health` and `curl :8000/health` both 200 | As expected, after one fix (see below) | ✅ Pass | #8 |
 | T-24 | matching-service's generated API docs page loads after `docker compose up` | matching-service (docker) | `curl :8000/docs` → 200 | As expected | ✅ Pass | #8 |
-| T-25 | orchestrator's Swagger UI loads after `docker compose up` | backend (docker) | 200 once #9 merges | Currently 404 on `main` (`springdoc` lands with #10); confirmed 200 in #10's own manual run against a locally built image | ✅ Pass (see #10) | #8 |
+| T-25 | orchestrator's Swagger UI loads after `docker compose up` | backend (docker) | 200 | 200, confirmed once #10's and #13's independent `springdoc-openapi` additions were merged into one dependency | ✅ Pass | #8 |
 | T-26 | `PasswordEncoder` hashes rather than passing input through unchanged, and salts each call differently (2 tests) | backend | Encoded value never equals raw input; two encodings of the same input differ | As expected | ✅ Pass | #10 |
 | T-27 | `CreateUserRequest` bean validation rejects a blank name and a malformed email, and accepts a well-formed request (3 tests) | backend | Violations reported on the right field; a valid request produces none | As expected | ✅ Pass | #10 |
 | T-28 | **A user is created via `POST /users`, then fetched via `GET /users/{id}` and the data matches** (issue #10 Minimum Integration Test) | backend | 201 with `complianceStatus: PENDING`; subsequent GET returns the same `fullName`/`email`; stored `password_hash` is never the raw password | As expected | ✅ Pass | #10 |
 | T-29 | `GET /users/{id}` for an id with no matching row | backend | 404, not an unhandled 500 | As expected | ✅ Pass | #10 |
 | T-30 | `PATCH /users/{id}` with only `complianceStatus` set leaves `fullName` unchanged | backend | 200, `complianceStatus` updated, `fullName` untouched | As expected | ✅ Pass | #10 |
 | T-31 | `POST /users` with an email differing only in case from an existing user | backend | 409, not the raw `DataIntegrityViolationException` | As expected | ✅ Pass | #10 |
+| T-32 | Rule engine rejects each disqualifying condition independently: capacity, cargo/vehicle incompatibility, non-overlapping availability, different city (4 tests), accepts and explains a valid match, and ranks by capacity headroom | matching-service | Each disqualified case returns no match; the valid case returns all 4 reasons; two eligible trucks are ordered by headroom, not tied | As expected | ✅ Pass | #13 |
+| T-33 | `POST /match` correctly serialises the rule engine's decision to and from HTTP, including the empty-result case | matching-service | 200 with the eligible truck and its reasons; 200 with an empty list when nothing qualifies | As expected | ✅ Pass | #13 |
+| T-34 | `MatchingServiceClient.requestMatches(...)` sends snake_case field names matching-service expects and parses the response | backend | Request body contains `origin_city`, `weight_kg`, `vehicle_type`; response parses to `truckId`, `score`, `reasons` | As expected | ✅ Pass | #13 |
+| T-35 | `MatchingCoordinator` fetches the load and available trucks, persists every eligible match, and writes an audit event naming the actor, the load, and the match count, including when zero trucks are eligible | backend | 1 match persisted and 1 audit event with `matchCount: 1`; on the zero-match path, 0 matches persisted and 1 audit event with `matchCount: 0` | As expected | ✅ Pass | #13 |
+| T-36 | **Real HTTP call from the orchestrator to matching-service returns the correct match within 2 seconds on #7's seeded data** (replaces T-05–T-07's dummy round trip; issue #13's required performance evidence) | both (e2e) | The seeded open load matches exactly the one eligible seeded truck, with real reasons, in under 2000ms | 706ms, eligible truck found | ✅ Pass | #13 |
 
 ### Evidence for T-19–T-22
 
@@ -208,8 +213,8 @@ executable lines a test run touched at least once.
 
 | Service | Tool | Line coverage | Gate | Status |
 |---|---|---|---|---|
-| backend | JaCoCo 0.8.12 | **94.5%** (240/254 lines) | 80% | ✅ Pass |
-| matching-service | pytest-cov | **100%** (8/8 lines) | 80% | ✅ Pass |
+| backend | JaCoCo 0.8.12 | **91.2%** (936/1026 lines) | 80% | ✅ Pass |
+| matching-service | pytest-cov | **100%** (165/165 lines) | 80% | ✅ Pass |
 
 Reports are uploaded as CI artifacts (`coverage-backend`, `coverage-matching-service`)
 on every run, including failures — the number matters most when the gate trips.
@@ -226,21 +231,28 @@ so any real logic added elsewhere is still measured.
 Nothing is excluded on the Python side.
 
 The backend figure was recorded as 100% (4/4 lines) when #2 landed, then 95% (19/20) once
-#6's schema tests were measured against the merged state of #2/#4/#5 (the drop was
-`IntegrationController`'s `/integration/ping` handler, reachable only through the e2e-tagged
-T-07). It is now **93.5% (200/214)**, remeasured again after #6 grew to include the JPA persistence
-layer: 10 entities, 10 repositories, and their accessor and mapping code. 14 lines remain
-uncovered per `target/site/jacoco/jacoco.csv`: 1 in `IntegrationController` (the same e2e-only
-line as above), 3 in `InetAddressConverter`, and 1–4 each in `Dispute`, `ComplianceDocument`,
-`Truck`, `User`, `Match` and `Load` — small enough per class that no single test is missing,
-this is the ordinary residue of entity accessors no test path happens to touch. All figures
-here are taken from the JaCoCo CSV directly, not estimated.
+#6's schema tests were measured against the merged state of #2/#4/#5, then 93.5% (200/214)
+once #6 grew to include the JPA persistence layer. It is now **92.6% (249/269)**, remeasured
+after #13 added the matching coordinator, controller and DTOs and removed
+`IntegrationController` (the e2e-only line that accounted for one previous gap disappeared
+with the class it was in). 20 lines remain uncovered per `target/site/jacoco/jacoco.csv`: 3
+in `InetAddressConverter`, 1–4 each across `Dispute`, `ComplianceDocument`, `Truck`, `User`,
+`Match` and `Load` (unused accessors, as before), and 1, 3 and 3 in `GenerateMatchesRequest`,
+`MatchController` and `MatchSummary` respectively. The last of these is a genuine, honestly
+recorded gap rather than an accessor: `MatchController.generateMatches(...)` itself is never
+called by any test. `MatchingCoordinatorTest` calls the coordinator directly, and the real
+curl in this PR's Testing Guide exercises the controller manually but is not an automated
+test. A `MockMvc`-based controller test would close this; not written here because the
+coordinator (where the actual logic lives) is already fully covered and the controller
+method is a two-line pass-through. All figures here are taken from the JaCoCo CSV directly,
+not estimated.
 
-It is now **94.5% (240/254)**, remeasured after #10 added `UserController`, its two DTOs
-(`CreateUserRequest`, `UpdateUserRequest`, `UserResponse`), `PasswordEncoderConfig` and
-`UserNotFoundException`, all fully exercised by `UserControllerTest` and
-`PasswordEncoderConfigTest`. The one new uncovered line sits in `User`'s existing accessors,
-the same kind of residue named above, not new dead code from this issue.
+It is now **91.2% (936/1026)**, remeasured after merging #10's user/profile work
+(`UserController`, `CreateUserRequest`, `UpdateUserRequest`, `UserResponse`,
+`PasswordEncoderConfig`, `UserNotFoundException`) and #8's Dockerfiles into #13's branch.
+The percentage moved because the two feature sets landed independently and the bundle
+measured here is neither one alone; `mvn clean verify` was rerun against the merged tree
+rather than assuming the two issues' figures would simply add up.
 
 ## Known defects
 
@@ -262,6 +274,19 @@ supported on this repository. Please ensure Dependency graph is enabled." This w
 repository setting, not a code defect: Dependabot alerts (`vulnerability-alerts`) were
 disabled, which the dependency-review feature depends on. Enabled via
 `gh api -X PUT repos/.../vulnerability-alerts`; the job passed on rerun with no code change.
+
+### Found during #13: a real network call the mock test could not catch
+
+`MatchingTimingE2ETest`'s first run against a genuinely running matching-service failed
+with FastAPI reporting the entire request body missing, even though Spring's own trace
+logging confirmed a correct body had been built and handed to the HTTP layer. Root cause:
+`MatchingServiceConfig` used the JDK's default `java.net.http.HttpClient`, which sends
+`Expect: 100-continue` for POST requests with a body; uvicorn does not answer that
+negotiation, so the client gave up waiting and the body never reached the server.
+`MatchingServiceClientTest`'s `MockRestServiceServer`-based test passed throughout this,
+because a mock server has no transport layer to disagree with the client about. Fixed by
+switching to `SimpleClientHttpRequestFactory`. This is the reason #13's plan insisted on a
+real network call for the timing test rather than a mock: the bug was only visible there.
 
 ## How to reproduce
 
@@ -286,12 +311,13 @@ pytest
 
 The 80% threshold lives in `pyproject.toml`, so a local run gates exactly as CI does.
 
-### The cross-service end-to-end test (T-07)
+### The cross-service end-to-end test (T-36)
 
-T-07 needs **both** services running, so it is tagged `e2e` and excluded from the
-default Maven run. Without that exclusion the `backend (Java)` CI job would depend on
-a live Python process, destroying the per-service independence that #2 exists to
-provide — a backend failure would no longer tell you which service actually broke.
+T-36 needs **both** services running, plus a Docker daemon for its own Testcontainers
+Postgres, so it is tagged `e2e` and excluded from the default Maven run. Without that
+exclusion the `backend (Java)` CI job would depend on a live Python process, destroying
+the per-service independence that #2 exists to provide: a backend failure would no
+longer tell you which service actually broke.
 
 ```bash
 # terminal 1
@@ -301,7 +327,8 @@ cd matching-service && uvicorn matching_service.main:app --port 8000
 cd backend && mvn verify -Pe2e
 ```
 
-Expected: `Tests run: 1, Failures: 0` / `BUILD SUCCESS`.
+Expected: `Tests run: 1, Failures: 0` / `BUILD SUCCESS`, with `Matching round trip took
+NNNms` printed (706ms when last measured).
 
 If port 8000 is already in use — likely when several people or agents work on this
 machine at once — start the service on another port and point the orchestrator at it:

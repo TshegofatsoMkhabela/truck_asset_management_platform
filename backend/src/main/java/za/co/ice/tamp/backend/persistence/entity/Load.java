@@ -97,6 +97,14 @@ public class Load {
         return volumeM3;
     }
 
+    public OffsetDateTime getPickupWindowStart() {
+        return pickupWindowStart;
+    }
+
+    public OffsetDateTime getPickupWindowEnd() {
+        return pickupWindowEnd;
+    }
+
     public String getStatus() {
         return status;
     }
