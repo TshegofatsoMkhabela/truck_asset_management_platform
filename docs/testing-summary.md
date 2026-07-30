@@ -47,11 +47,17 @@ the row says so rather than carrying a placeholder.
 | T-34 | `MatchingServiceClient.requestMatches(...)` sends snake_case field names matching-service expects and parses the response | backend | Request body contains `origin_city`, `weight_kg`, `vehicle_type`; response parses to `truckId`, `score`, `reasons` | As expected | ✅ Pass | #13 |
 | T-35 | `MatchingCoordinator` fetches the load and available trucks, persists every eligible match, and writes an audit event naming the actor, the load, and the match count, including when zero trucks are eligible | backend | 1 match persisted and 1 audit event with `matchCount: 1`; on the zero-match path, 0 matches persisted and 1 audit event with `matchCount: 0` | As expected | ✅ Pass | #13 |
 | T-36 | **Real HTTP call from the orchestrator to matching-service returns the correct match within 2 seconds on #7's seeded data** (replaces T-05–T-07's dummy round trip; issue #13's required performance evidence) | both (e2e) | The seeded open load matches exactly the one eligible seeded truck, with real reasons, in under 2000ms | 706ms, eligible truck found | ✅ Pass | #13 |
-| T-37 | `AcceptanceCoordinator` persists a decision with its actor and audit event, refuses a second decision on an already-decided match, and refuses an unknown match (3 tests) | backend | Status, `decidedBy` and `decidedAt` all set; `MATCH_ACCEPTED` audit event written; second decision throws rather than writing | As expected | ✅ Pass | #14 |
-| T-38 | The decision endpoint returns the right status for each outcome a caller can trigger: success, unknown match, already decided, an invalid decision value, and an `actorId` naming no existing user (5 tests) | backend | 200, 404, 409, 400, 400 respectively. The last was added by this issue's own adversarial review, which found it returned 500 | As expected | ✅ Pass | #14 |
-| T-39 | **A match is accepted via the API, then its receipt is fetched and contains the right match, actor and a generated contract ID** (issue #14 Minimum Integration Test), and a rejection issues no receipt (2 tests) | backend | Receipt returns `contractId` starting `TAMP-`, plus the captured IP and user-agent; a rejected match returns 404 from the receipt endpoint | As expected | ✅ Pass | #14 |
-| T-40 | **A trip is advanced via the API then read back in occurrence order** (issue #15 Minimum Integration Test), plus tracking refused on a match nobody accepted, an unknown status refused, and an unknown match refused (4 tests) | backend | 201 then 200 with events oldest-first; 409, 400 and 404 on the three failure paths | As expected | ✅ Pass | #15 |
-| T-41 | The full post-acceptance journey runs against the seeded database over real HTTP: accept, fetch receipt, advance a trip through three stages, read it back, and every guard refuses correctly | backend + db (docker) | Real contract ID issued; 3 tracking events returned in order; 409 on re-decide, 409 on tracking a proposed match, 400 on an unknown status, 404 on a missing receipt | As expected, see evidence below | ✅ Pass | #14/#15 |
+| T-37 | **Freight owner creates a load and retrieves the owner's complete list** (issue #11 Minimum Integration Test) | backend (web) | POST /loads returns 201 with full response; GET /loads?ownerId=X returns list containing the created load | As expected | ✅ Pass | #11 |
+| T-38 | `GET /loads/{id}` fetches a single load by ID | backend (web) | Fetch a created load by its ID, verify status (OPEN), origin, destination, weight in response | As expected | ✅ Pass | #11 |
+| T-39 | `PATCH /loads/{id}` updates load status only, without requiring re-entry of fields | backend (web) | Update status to MATCHED without sending originCity/destination; response includes original fields unchanged | As expected | ✅ Pass | #11 |
+| T-40 | `GET /loads/{id}` with unknown ID returns 404 | backend (web) | Random UUID in path returns 404 with error message | As expected | ✅ Pass | #11 |
+| T-41 | Creating a load writes an `audit_logs` row with action=LOAD_POSTED | backend (web) | POST /loads triggers insert into audit_logs with actorId=ownerId, action="LOAD_POSTED", entityType="load" | As expected | ✅ Pass | #11 |
+| T-42 | `POST /loads` rejects invalid cargo type, non-positive weight/volume, blank cities | backend (web) | DTO validation (Jakarta Bean Validation) rejects GENERAL+INVALID, weightKg=0, blank originCity (HTTP 400) | As expected | ✅ Pass | #11 |
+| T-43 | `AcceptanceCoordinator` persists a decision with its actor and audit event, refuses a second decision on an already-decided match, and refuses an unknown match (3 tests) | backend | Status, `decidedBy` and `decidedAt` all set; `MATCH_ACCEPTED` audit event written; second decision throws rather than writing | As expected | ✅ Pass | #14 |
+| T-44 | The decision endpoint returns the right status for each outcome a caller can trigger: success, unknown match, already decided, an invalid decision value, and an `actorId` naming no existing user (5 tests) | backend | 200, 404, 409, 400, 400 respectively. The last was added by this issue's own adversarial review, which found it returned 500 | As expected | ✅ Pass | #14 |
+| T-45 | **A match is accepted via the API, then its receipt is fetched and contains the right match, actor and a generated contract ID** (issue #14 Minimum Integration Test), and a rejection issues no receipt (2 tests) | backend | Receipt returns `contractId` starting `TAMP-`, plus the captured IP and user-agent; a rejected match returns 404 from the receipt endpoint | As expected | ✅ Pass | #14 |
+| T-46 | **A trip is advanced via the API then read back in occurrence order** (issue #15 Minimum Integration Test), plus tracking refused on a match nobody accepted, an unknown status refused, and an unknown match refused (4 tests) | backend | 201 then 200 with events oldest-first; 409, 400 and 404 on the three failure paths | As expected | ✅ Pass | #15 |
+| T-47 | The full post-acceptance journey runs against the seeded database over real HTTP: accept, fetch receipt, advance a trip through three stages, read it back, and every guard refuses correctly | backend + db (docker) | Real contract ID issued; 3 tracking events returned in order; 409 on re-decide, 409 on tracking a proposed match, 400 on an unknown status, 404 on a missing receipt | As expected, see evidence below | ✅ Pass | #14/#15 |
 
 ### Evidence for T-19–T-22
 
@@ -207,7 +213,7 @@ answer `/health` with an identical shape, so a misconfigured port mapping could 
 a probe to the wrong service and still return `{"status":"UP"}`. The service name is
 what distinguishes them.
 
-### Evidence for T-41
+### Evidence for T-47
 
 Run against the seeded database from #7, with a match already proposed by #13's matching
 endpoint. Port 55433 because 5432 was held by an unrelated container, the conflict the
@@ -257,7 +263,7 @@ executable lines a test run touched at least once.
 
 | Service | Tool | Line coverage | Gate | Status |
 |---|---|---|---|---|
-| backend | JaCoCo 0.8.12 | **95.2%** (379/398 lines) | 80% | ✅ Pass |
+| backend | JaCoCo 0.8.12 | **97.4%** (489/502 lines) | 80% | ✅ Pass |
 | matching-service | pytest-cov | **100%** (165/165 lines) | 80% | ✅ Pass |
 
 Reports are uploaded as CI artifacts (`coverage-backend`, `coverage-matching-service`)
@@ -291,9 +297,9 @@ coordinator (where the actual logic lives) is already fully covered and the cont
 method is a two-line pass-through. All figures here are taken from the JaCoCo CSV directly,
 not estimated.
 
-It is now **95.2% (379/398)**, remeasured after #14 and #15 added the acceptance and tracking coordinators, their controllers and DTOs.
+It is now **97.4% (489/502)**, remeasured on the merged tree after #14 and #15 added the acceptance and tracking coordinators, their controllers and DTOs, and after #11's loads and #12's trucks endpoints merged into this branch. Measured on the merge rather than carried over from either side, since the bundle is neither one alone.
 
-**Correction to the figure #13 recorded here.** #13's row read "91.2% (936/1026 lines)". That number was *instruction* coverage, not line coverage: it was summed from columns 4 and 5 of `jacoco.csv` (`INSTRUCTION_MISSED`/`INSTRUCTION_COVERED`) rather than columns 8 and 9. The JaCoCo gate itself is configured on `<counter>LINE</counter>`, so the build was always measuring the right thing and nothing was ever passed that should have failed. Only the hand-written summary read the wrong columns, which is exactly why the error stayed invisible: a wrong number in a document fails no test. Every figure in this table is now taken from columns 8 and 9.
+**Correction to a figure this table carried for three issues.** #13's row read "91.2% (936/1026 lines)", and #11 later carried the same shape forward as "91.1% (936/1026 lines)". That number was *instruction* coverage, not line coverage: it was summed from columns 4 and 5 of `jacoco.csv` (`INSTRUCTION_MISSED`/`INSTRUCTION_COVERED`) rather than columns 8 and 9. The JaCoCo gate itself is configured on `<counter>LINE</counter>`, so the build was always measuring the right thing and nothing was ever passed that should have failed. Only the hand-written summary read the wrong columns, which is exactly why the error stayed invisible: a wrong number in a document fails no test. Every figure in this table is now taken from columns 8 and 9. The identical 936/1026 appearing under two different percentages across separate issues is the tell that it was being copied forward rather than remeasured.
 
 The superseded #13 paragraph, kept for the record: measured after merging #10's user/profile work
 (`UserController`, `CreateUserRequest`, `UpdateUserRequest`, `UserResponse`,
