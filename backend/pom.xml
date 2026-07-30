@@ -68,14 +68,6 @@
             <scope>runtime</scope>
         </dependency>
 
-        <!-- springdoc-openapi: generates Swagger UI from the existing @RestController
-             annotations, matching what FastAPI already generates for matching-service. -->
-        <dependency>
-            <groupId>org.springdoc</groupId>
-            <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
-            <version>2.8.6</version>
-        </dependency>
-
         <!-- Feature code reads and writes through entities and repositories, never SQL
              strings. The schema itself stays owned by db/migrations (#6); ddl-auto is set
              to validate, not update or create, so Hibernate checks the mapping against that
@@ -104,6 +96,20 @@
             <groupId>org.testcontainers</groupId>
             <artifactId>testcontainers-postgresql</artifactId>
             <scope>test</scope>
+        </dependency>
+
+        <!-- Brief section 7 lists an OpenAPI file as a required submission artifact, and
+             section 2.2 names Swagger/OpenAPI as the back-end demonstration vehicle; every
+             feature issue from #10 onward also carries its own OpenAPI acceptance criterion.
+             #10, #13 and #9 each independently added this dependency for that reason,
+             discovered as a merge conflict rather than planned; kept here as one copy,
+             covering #9's JWT bearer security scheme alongside #10's and #13's needs.
+             Auto-exposes /swagger-ui.html and /v3/api-docs with zero configuration beyond
+             this dependency. -->
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+            <version>2.8.9</version>
         </dependency>
     </dependencies>
 

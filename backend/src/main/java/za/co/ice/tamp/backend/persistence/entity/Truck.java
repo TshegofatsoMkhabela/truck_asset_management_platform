@@ -90,6 +90,14 @@ public class Truck {
         return currentCity;
     }
 
+    public OffsetDateTime getAvailableFrom() {
+        return availableFrom;
+    }
+
+    public OffsetDateTime getAvailableUntil() {
+        return availableUntil;
+    }
+
     public String getStatus() {
         return status;
     }

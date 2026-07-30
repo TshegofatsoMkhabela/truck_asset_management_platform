@@ -46,6 +46,16 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * Absorbed from {@code UserController} (#10), whose own local handler was explicitly written
+     * as a placeholder "until #9's @ControllerAdvice lands, since that handler will cover this
+     * same exception type globally."
+     */
+    @ExceptionHandler(UserNotFoundException.class)
+    public ResponseEntity<ApiError> handleUserNotFound(UserNotFoundException exception) {
+        return respond(HttpStatus.NOT_FOUND, "USER_NOT_FOUND", exception.getMessage());
+    }
+
+    /**
      * Defense in depth against the race window between {@code AuthController}'s existence check
      * and its insert: two concurrent registrations for the same email could both pass the check
      * before either commits. The database's unique constraint is the real guarantee; this only

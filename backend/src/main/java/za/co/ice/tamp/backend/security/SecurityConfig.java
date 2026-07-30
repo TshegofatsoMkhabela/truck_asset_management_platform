@@ -6,8 +6,6 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
@@ -17,6 +15,11 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  * security context, and role-restricted endpoints layer {@code @PreAuthorize} on top of that.
  * Deny-by-default rather than allow-by-default with per-endpoint annotations, because a
  * forgotten annotation on a new endpoint would otherwise silently ship unauthenticated.
+ *
+ * <p>The {@code PasswordEncoder} bean lives in {@link PasswordEncoderConfig} (#10), not here:
+ * #10 introduced it first so user creation never stored a plaintext password while this class
+ * was still being built, on the explicit understanding that #9 would reuse it rather than
+ * define a second one.
  */
 @Configuration
 @EnableMethodSecurity
@@ -32,11 +35,6 @@ public class SecurityConfig {
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
         this.authenticationEntryPoint = authenticationEntryPoint;
         this.accessDeniedHandler = accessDeniedHandler;
-    }
-
-    @Bean
-    public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
     }
 
     /**
@@ -57,7 +55,7 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http.authorizeHttpRequests(authorize -> authorize
-                        .requestMatchers("/health", "/", "/auth/register", "/auth/login").permitAll()
+                        .requestMatchers("/health", "/", "/auth/register", "/auth/login", "/users", "/users/**").permitAll()
                         .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         .anyRequest().authenticated())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
