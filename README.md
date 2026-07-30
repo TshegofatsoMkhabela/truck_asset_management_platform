@@ -265,15 +265,18 @@ curl -X POST http://localhost:8080/matches/$MATCH/tracking   -H "Content-Type: a
 curl http://localhost:8080/matches/$MATCH/tracking
 ```
 ```json
-[{"status":"DISPATCHED","latitude":null,"longitude":null,"occurredAt":"...23.72Z"},
- {"status":"DELIVERED","latitude":-29.858680,"longitude":31.021840,"occurredAt":"...24.00Z"}]
+[{"matchId":"019fb19d-...","latitude":null,"longitude":null,"status":"DISPATCHED",
+  "occurredAt":"2026-07-30T06:47:39.070202Z"},
+ {"matchId":"019fb19d-...","latitude":-29.858680,"longitude":31.021840,
+  "status":"DELIVERED","occurredAt":"2026-07-30T06:47:39.279192Z"}]
 ```
 
 Events come back oldest first, so the response reads as a journey. Coordinates are synthetic
 and no live GPS source exists or is planned; see [Known Limitations](docs/known-limitations.md).
 
-None of these endpoints restrict by role yet: `actorId` stands in for an authenticated caller
-until #9 lands, exactly as `requestedBy` does on the matching endpoint.
+The tracking endpoints ship from #15; acceptance and receipts from #14. None of them restrict
+by role yet: `actorId` stands in for an authenticated caller until #9 lands, exactly as
+`requestedBy` does on the matching endpoint.
 
 ## Documentation
 

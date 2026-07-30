@@ -53,11 +53,15 @@ the row says so rather than carrying a placeholder.
 | T-40 | `GET /loads/{id}` with unknown ID returns 404 | backend (web) | Random UUID in path returns 404 with error message | As expected | ✅ Pass | #11 |
 | T-41 | Creating a load writes an `audit_logs` row with action=LOAD_POSTED | backend (web) | POST /loads triggers insert into audit_logs with actorId=ownerId, action="LOAD_POSTED", entityType="load" | As expected | ✅ Pass | #11 |
 | T-42 | `POST /loads` rejects invalid cargo type, non-positive weight/volume, blank cities | backend (web) | DTO validation (Jakarta Bean Validation) rejects GENERAL+INVALID, weightKg=0, blank originCity (HTTP 400) | As expected | ✅ Pass | #11 |
-| T-43 | `AcceptanceCoordinator` persists a decision with its actor and audit event, refuses a second decision on an already-decided match, and refuses an unknown match (3 tests) | backend | Status, `decidedBy` and `decidedAt` all set; `MATCH_ACCEPTED` audit event written; second decision throws rather than writing | As expected | ✅ Pass | #14 |
-| T-44 | The decision endpoint returns the right status for each outcome a caller can trigger: success, unknown match, already decided, an invalid decision value, and an `actorId` naming no existing user (5 tests) | backend | 200, 404, 409, 400, 400 respectively. The last was added by this issue's own adversarial review, which found it returned 500 | As expected | ✅ Pass | #14 |
-| T-45 | **A match is accepted via the API, then its receipt is fetched and contains the right match, actor and a generated contract ID** (issue #14 Minimum Integration Test), and a rejection issues no receipt (2 tests) | backend | Receipt returns `contractId` starting `TAMP-`, plus the captured IP and user-agent; a rejected match returns 404 from the receipt endpoint | As expected | ✅ Pass | #14 |
-| T-46 | **A trip is advanced via the API then read back in occurrence order** (issue #15 Minimum Integration Test), plus tracking refused on a match nobody accepted, an unknown status refused, and an unknown match refused (4 tests) | backend | 201 then 200 with events oldest-first; 409, 400 and 404 on the three failure paths | As expected | ✅ Pass | #15 |
-| T-47 | The full post-acceptance journey runs against the seeded database over real HTTP: accept, fetch receipt, advance a trip through three stages, read it back, and every guard refuses correctly | backend + db (docker) | Real contract ID issued; 3 tracking events returned in order; 409 on re-decide, 409 on tracking a proposed match, 400 on an unknown status, 404 on a missing receipt | As expected, see evidence below | ✅ Pass | #14/#15 |
+| T-43 | **Advance a match's tracking status via the API, fetch it back, and confirm it persisted** (issue #15 Minimum Integration Test) | backend (web) | Two POSTs (IN_TRANSIT then DELIVERED) to `/matches/{id}/tracking` each return 201; GET returns both events oldest-first | As expected | ✅ Pass | #15 |
+| T-44 | A position-only event (coordinates, no status) is accepted, matching the schema's "position or status" rule | backend (web) | 201 with the coordinates echoed and `status` null | As expected | ✅ Pass | #15 |
+| T-45 | An event carrying neither a status nor a coordinate pair is rejected before reaching the database | backend (web) | 400 from DTO validation, not a database-constraint 500 | As expected | ✅ Pass | #15 |
+| T-46 | Tracking a match that exists but is not ACCEPTED is refused | backend (web) | 409 with a message naming the match's actual status | As expected | ✅ Pass | #15 |
+| T-47 | Tracking endpoints with an unknown match id return 404 on both POST and GET | backend (web) | 404, not an unhandled 500 | As expected | ✅ Pass | #15 |
+| T-48 | `AcceptanceCoordinator` persists a decision with its actor and audit event, refuses a second decision on an already-decided match, and refuses an unknown match (3 tests) | backend | Status, `decidedBy` and `decidedAt` all set; `MATCH_ACCEPTED` audit event written; second decision throws rather than writing | As expected | ✅ Pass | #14 |
+| T-49 | The decision endpoint returns the right status for each outcome a caller can trigger: success, unknown match, already decided, an invalid decision value, and an `actorId` naming no existing user (5 tests) | backend | 200, 404, 409, 400, 400 respectively. The last was added by this issue's own adversarial review, which found it returned 500 | As expected | ✅ Pass | #14 |
+| T-50 | **A match is accepted via the API, then its receipt is fetched and contains the right match, actor and a generated contract ID** (issue #14 Minimum Integration Test), and a rejection issues no receipt (2 tests) | backend | Receipt returns `contractId` starting `TAMP-`, plus the captured IP and user-agent; a rejected match returns 404 from the receipt endpoint | As expected | ✅ Pass | #14 |
+| T-51 | The full post-acceptance journey runs against the seeded database over real HTTP: accept, fetch receipt, advance a trip through three stages, read it back, and every guard refuses correctly | backend + db (docker) | Real contract ID issued; 3 tracking events returned in order; 409 on re-decide, 409 on tracking a proposed match, 400 on an unknown status, 404 on a missing receipt | As expected, see evidence below | ✅ Pass | #14/#15 |
 
 ### Evidence for T-19–T-22
 
@@ -213,44 +217,53 @@ answer `/health` with an identical shape, so a misconfigured port mapping could 
 a probe to the wrong service and still return `{"status":"UP"}`. The service name is
 what distinguishes them.
 
-### Evidence for T-47
+### Evidence for T-51
 
-Run against the seeded database from #7, with a match already proposed by #13's matching
-endpoint. Port 55433 because 5432 was held by an unrelated container, the conflict the
-README documents.
+Re-run against the merged tree, so this records the code that actually ships: acceptance and
+receipts from this PR, tracking from #33. Port 55433 because 5432 was held by an unrelated
+container, the conflict the README documents.
 
 ```
 $ curl -X POST http://localhost:8080/matches/$MATCH/decision     -H "Content-Type: application/json"     -d '{"decision": "ACCEPTED", "actorId": "00000000-0000-7000-8000-000000000001"}'
-{"matchId":"019fb120-...","status":"ACCEPTED",
- "decidedBy":"00000000-0000-7000-8000-000000000001","decidedAt":"2026-07-30T08:00:37.81+02:00"}
+{"matchId":"019fb19d-...","status":"ACCEPTED",
+ "decidedBy":"00000000-0000-7000-8000-000000000001","decidedAt":"2026-07-30T08:47:39.05+02:00"}
 
 $ curl http://localhost:8080/matches/$MATCH/receipt
-{"id":"019fb19c-...","contractId":"TAMP-2026-56E42E93F0","matchId":"019fb120-...",
+{"id":"019fb1c7-...","contractId":"TAMP-2026-20D29C52FB","matchId":"019fb19d-...",
  "decision":"ACCEPTED","actorId":"00000000-0000-7000-8000-000000000001",
- "ipAddress":"::1","userAgent":"curl/8.17.0","issuedAt":"2026-07-30T06:00:38.21Z"}
+ "ipAddress":"::1","userAgent":"curl/8.17.0","issuedAt":"2026-07-30T06:47:38.39Z"}
 
-$ curl http://localhost:8080/matches/$MATCH/tracking          # after 3 POSTs
-[{"status":"DISPATCHED","latitude":null,"longitude":null,"occurredAt":"...23.725374Z"},
- {"status":"IN_TRANSIT","latitude":-30.559482,"longitude":22.937506,"occurredAt":"...23.874254Z"},
- {"status":"DELIVERED","latitude":-29.858680,"longitude":31.021840,"occurredAt":"...24.005833Z"}]
+$ curl http://localhost:8080/matches/$MATCH/tracking          # after 2 POSTs, both 201
+[{"id":"019fb1c7-573e-...","matchId":"019fb19d-...","latitude":null,"longitude":null,
+  "status":"DISPATCHED","occurredAt":"2026-07-30T06:47:39.070202Z"},
+ {"id":"019fb1c7-580f-...","matchId":"019fb19d-...","latitude":-29.858680,
+  "longitude":31.021840,"status":"DELIVERED","occurredAt":"2026-07-30T06:47:39.279192Z"}]
 
-$ # guards
-  re-decide an accepted match            HTTP 409
-  track a PROPOSED match                 HTTP 409  "Only an accepted match has a trip."
-  POST tracking status TELEPORTED        HTTP 400
-  GET receipt for a match with none      HTTP 404  "A receipt is issued only on acceptance."
+$ # guards owned by this PR
+  re-decide an accepted match                    HTTP 409
+  decision value "MAYBE"                         HTTP 400
+  actorId naming no existing user                HTTP 400
+    "The request referenced a user that does not exist. Check actorId against a real user id."
+  GET receipt for a match with none              HTTP 404
+    "A receipt is issued only on acceptance."
 ```
 
-The `contractId` above is real, not illustrative: it is generated by the database default on
-`receipts.contract_id`, so seeing a `TAMP-` value in the response is what proves the receipt
-was read back after insert rather than returned from the persistence context that wrote it.
+The `contractId` is real, not illustrative: it is generated by the database default on
+`receipts.contract_id`, so a `TAMP-` value in the response is what proves the receipt was read
+back after insert rather than returned from the persistence context that wrote it. It differs
+from the value recorded in earlier drafts of this section because each run issues a new one.
 
-One of these checks initially appeared to fail. Tracking a match returned 201 where 409 was
-expected, and the cause was the check itself, not the code: the id used was #7's seeded
-match, which the seed data creates in an already-ACCEPTED state, so tracking it is correct
-behaviour. Re-run against a genuinely PROPOSED match, the guard returned 409 as designed.
-Recorded here because "the test was wrong" is a conclusion worth being suspicious of, and the
-only thing that makes it credible is the corrected run being shown alongside it.
+Two manual checks in this section first appeared to fail, and in both cases the check was wrong
+rather than the code. Tracking a match returned 201 where 409 was expected, and deciding with a
+bogus `actorId` returned 409 where 400 was expected. Both used ids from #7's seed data, which
+creates matches already in an `ACCEPTED` state, so in the first case tracking was legitimately
+allowed and in the second the already-decided guard correctly fired before the actor was ever
+examined. Re-run against genuinely `PROPOSED` matches, both returned what was expected.
+
+The transferable point, since this happened twice: **seeded fixtures carry state**, so a manual
+check of a guard has to assert the precondition it depends on, or it silently tests a different
+branch than intended. The automated tests never had this problem, because `MatchFixture` builds
+a match in a known state for every case.
 
 ## Coverage
 
@@ -263,7 +276,7 @@ executable lines a test run touched at least once.
 
 | Service | Tool | Line coverage | Gate | Status |
 |---|---|---|---|---|
-| backend | JaCoCo 0.8.12 | **97.4%** (489/502 lines) | 80% | ✅ Pass |
+| backend | JaCoCo 0.8.12 | **97.5%** (503/516 lines) | 80% | ✅ Pass |
 | matching-service | pytest-cov | **100%** (165/165 lines) | 80% | ✅ Pass |
 
 Reports are uploaded as CI artifacts (`coverage-backend`, `coverage-matching-service`)
@@ -297,7 +310,7 @@ coordinator (where the actual logic lives) is already fully covered and the cont
 method is a two-line pass-through. All figures here are taken from the JaCoCo CSV directly,
 not estimated.
 
-It is now **97.4% (489/502)**, remeasured on the merged tree after #14 and #15 added the acceptance and tracking coordinators, their controllers and DTOs, and after #11's loads and #12's trucks endpoints merged into this branch. Measured on the merge rather than carried over from either side, since the bundle is neither one alone.
+It is now **97.5% (503/516)**, remeasured on the merged tree carrying #14's acceptance and receipts, #33's tracking, and #11's loads and #12's trucks. Measured on the merge rather than carried over from either side, since the bundle is neither one alone.
 
 **Correction to a figure this table carried for three issues.** #13's row read "91.2% (936/1026 lines)", and #11 later carried the same shape forward as "91.1% (936/1026 lines)". That number was *instruction* coverage, not line coverage: it was summed from columns 4 and 5 of `jacoco.csv` (`INSTRUCTION_MISSED`/`INSTRUCTION_COVERED`) rather than columns 8 and 9. The JaCoCo gate itself is configured on `<counter>LINE</counter>`, so the build was always measuring the right thing and nothing was ever passed that should have failed. Only the hand-written summary read the wrong columns, which is exactly why the error stayed invisible: a wrong number in a document fails no test. Every figure in this table is now taken from columns 8 and 9. The identical 936/1026 appearing under two different percentages across separate issues is the tell that it was being copied forward rather than remeasured.
 
