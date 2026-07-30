@@ -40,7 +40,7 @@
             <artifactId>spring-boot-starter-data-jpa</artifactId>
         </dependency>
 
-        <!-- Enables @Valid / Jakarta Bean Validation annotations (@NotBlank, @Email) on
+        <!-- Enables @Valid / Jakarta Bean Validation annotations (@NotBlank, @Email, @Pattern) on
              request DTOs, so malformed input is rejected before it reaches the database. -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
