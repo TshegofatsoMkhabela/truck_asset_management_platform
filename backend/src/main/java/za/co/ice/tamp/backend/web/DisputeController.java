@@ -13,6 +13,7 @@ import java.util.UUID;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -24,6 +25,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import za.co.ice.tamp.backend.persistence.entity.Dispute;
 import za.co.ice.tamp.backend.persistence.repository.DisputeRepository;
+import za.co.ice.tamp.backend.security.CurrentUser;
 import za.co.ice.tamp.backend.web.dto.DisputeRequest;
 import za.co.ice.tamp.backend.web.dto.DisputeResponse;
 
@@ -43,7 +45,8 @@ public class DisputeController {
 
     @PostMapping("/matches/{matchId}/disputes")
     @Operation(summary = "Raise a dispute against a match",
-            description = "Flag a match as having an issue. Temporarily requires raisedBy as query param until #9 auth merges.")
+            description = "Flag a match as having an issue. raisedBy is a caller-supplied query "
+                    + "param, not read from an authenticated identity; see known-limitations.md.")
     @ApiResponses({
         @ApiResponse(responseCode = "201", description = "Dispute created",
                 content = @Content(schema = @Schema(implementation = DisputeResponse.class))),
@@ -51,12 +54,14 @@ public class DisputeController {
     })
     public ResponseEntity<DisputeResponse> raiseDispute(
             @PathVariable UUID matchId,
-            @RequestParam UUID raisedBy,
-            @Valid @RequestBody DisputeRequest disputeRequest) {
-        Dispute dispute = new Dispute(matchId, null, raisedBy, disputeRequest.description());
+            @RequestParam(required = false) UUID raisedBy,
+            @Valid @RequestBody DisputeRequest disputeRequest,
+            Authentication authentication) {
+        UUID actualRaisedBy = CurrentUser.requireIdOrFallback(authentication, raisedBy, "raisedBy");
+        Dispute dispute = new Dispute(matchId, null, actualRaisedBy, disputeRequest.description());
         Dispute saved = disputeRepository.save(dispute);
 
-        selfProxy.getObject().writeDisputeAudit(raisedBy, saved);
+        selfProxy.getObject().writeDisputeAudit(actualRaisedBy, saved);
 
         return ResponseEntity.status(HttpStatus.CREATED).body(DisputeResponse.from(saved));
     }

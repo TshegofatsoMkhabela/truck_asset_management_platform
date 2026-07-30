@@ -85,7 +85,7 @@ class MatchingCoordinatorTest extends JpaTestBase {
     void writesAnAuditEventEvenWhenNoTruckIsEligible() {
         // A zero-match result is a real outcome the audit trail must still record,
         // defending against an early "if no matches, skip the audit write" shortcut
-        // that would make FR-12's trail silently incomplete for the empty case.
+        // that would make the trail silently incomplete for the empty case.
         User owner = users.save(new User("Owner2", "mc-owner2@example.com", "hash", "FREIGHT_OWNER"));
         Load load = loads.save(new Load(owner.getId(), "Johannesburg", "Durban", "GENERAL",
                 new BigDecimal("10000.00"), new BigDecimal("20.00"),

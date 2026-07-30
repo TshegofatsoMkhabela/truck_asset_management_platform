@@ -82,6 +82,7 @@ the row says so rather than carrying a placeholder.
 | T-69 | `GET /disputes` returns only OPEN disputes for the admin queue | backend (web) | Filter applies; closed disputes excluded; dispute list queryable by status | As expected | ✅ Pass | #16 |
 | T-70 | `GET /disputes/{id}` fetches a single dispute and returns 404 for unknown ID | backend (web) | Fetch by ID returns full dispute; invalid UUID returns 404 with error message | As expected | ✅ Pass | #16 |
 | T-71 | Creating a dispute writes an `audit_logs` row with action=DISPUTE_RAISED | backend (web) | POST /disputes triggers insert into audit_logs with actorId=raisedBy, action="DISPUTE_RAISED", entityType="dispute" | As expected | ✅ Pass | #16 |
+| T-72 | **The full eight-step journey (register, post a load, post a truck, get a real match, accept, receive a receipt, track the trip, rate the counterparty, admin view) runs continuously over real HTTP** (issue #18 Minimum Integration Test) | backend + matching-service | Every step returns its expected status; the match step is a real matching-service round trip, not a persisted-directly match; admin metrics show at least 1 match afterward | As expected, 36.95s (`mvn verify -Pe2e`) | ✅ Pass | #18 |
 
 ### Evidence for T-19–T-22
 
@@ -296,7 +297,7 @@ executable lines a test run touched at least once.
 
 | Service | Tool | Line coverage | Gate | Status |
 |---|---|---|---|---|
-| backend | JaCoCo 0.8.12 | **94.6%** (721/762 lines) | 80% | ✅ Pass |
+| backend | JaCoCo 0.8.12 | **94.6%** (716/757 lines) | 80% | ✅ Pass |
 | matching-service | pytest-cov | **100%** (165/165 lines) | 80% | ✅ Pass |
 
 Reports are uploaded as CI artifacts (`coverage-backend`, `coverage-matching-service`)

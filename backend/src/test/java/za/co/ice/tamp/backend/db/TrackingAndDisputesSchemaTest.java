@@ -10,7 +10,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 /**
- * Proves the constraints on {@code tracking_events} (FR-08) and {@code disputes} (FR-10).
+ * Proves the constraints on {@code tracking_events} and {@code disputes}.
  *
  * <p>Neither table appears in issue #6's own list; both are required by brief section 3.2 and
  * section 2.2, and are included so the schema is decided once rather than migrated mid-build.
@@ -58,7 +58,7 @@ class TrackingAndDisputesSchemaTest extends MigratedSchemaTestBase {
     @Test
     void accepts_a_status_only_tracking_event() throws SQLException {
         // Brief section 3.2 allows "latitude, longitude or route status", so a status
-        // progression with no coordinates is a valid way to satisfy FR-08.
+        // progression with no coordinates is a valid way to satisfy this requirement.
         insertTrackingEvent(matchId, null, null, "IN_TRANSIT");
 
         assertThat(single("SELECT count(*)::text FROM tracking_events")).isEqualTo("1");
@@ -80,8 +80,8 @@ class TrackingAndDisputesSchemaTest extends MigratedSchemaTestBase {
 
     @Test
     void accepts_a_flag_raised_against_a_user_with_no_match_involved() throws SQLException {
-        // FR-10 covers "flagged/disputed items", and not every flag arises from a match:
-        // an admin may flag a user for conduct. Without this, the only way to express that
+        // "Flagged/disputed items" covers more than matches: an admin may flag a user for
+        // conduct with no match involved. Without this, the only way to express that
         // would be compliance_status = 'REJECTED', which means something different.
         String reported = insertUser("reported@example.com", "TRANSPORTER");
 
