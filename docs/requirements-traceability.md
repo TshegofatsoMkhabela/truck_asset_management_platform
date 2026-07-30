@@ -8,7 +8,7 @@ Maps each functional requirement to the code that implements it. Every row start
 |---|---|---|---|---|---|
 | FR-01 | Role-based registration/login for Freight Owner, Transporter and Admin | Must | — | — | Not implemented |
 | FR-02 | Basic identity/compliance information and simulated document upload or metadata | Must | — | — | Not implemented |
-| FR-03 | Freight Owner can create and view cargo loads | Must | — | — | Not implemented |
+| FR-03 | Freight Owner can create and view cargo loads | Must | POST/GET/PATCH /loads (`LoadController`) | `LoadControllerTest.createsAndListsLoadForItsOwner`, `getByIdReturnsTheCreatedLoad`, `updatesStatusOnlyWithoutResendingFields`, `postingALoadWritesAnAuditEvent`, `returns404ForUnknownLoadId` | Complete |
 | FR-04 | Transporter can create and view available trucks | Must | — | — | Not implemented |
 | FR-05 | Rule-based matching using compatibility, location and availability | Must | — | — | Not implemented |
 | FR-06 | Users can accept or reject a match and the decision is logged | Must | — | — | Not implemented |
