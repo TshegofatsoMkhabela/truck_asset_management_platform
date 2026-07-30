@@ -69,4 +69,8 @@ public class Rating {
     public String getComment() {
         return comment;
     }
+
+    public OffsetDateTime getCreatedAt() {
+        return createdAt;
+    }
 }
