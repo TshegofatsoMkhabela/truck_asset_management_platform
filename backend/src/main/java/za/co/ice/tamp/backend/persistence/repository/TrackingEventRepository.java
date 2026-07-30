@@ -7,6 +7,6 @@ import za.co.ice.tamp.backend.persistence.entity.TrackingEvent;
 
 public interface TrackingEventRepository extends JpaRepository<TrackingEvent, UUID> {
 
-    /** Backs FR-08: the trip progress view reads events oldest-first. */
+    /** Backs the trip progress view, which reads events oldest-first. */
     List<TrackingEvent> findByMatchIdOrderByOccurredAtAsc(UUID matchId);
 }

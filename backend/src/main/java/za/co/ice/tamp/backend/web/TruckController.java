@@ -7,6 +7,7 @@ import java.util.Map;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -19,20 +20,21 @@ import za.co.ice.tamp.backend.persistence.entity.AuditLog;
 import za.co.ice.tamp.backend.persistence.entity.Truck;
 import za.co.ice.tamp.backend.persistence.repository.AuditLogRepository;
 import za.co.ice.tamp.backend.persistence.repository.TruckRepository;
+import za.co.ice.tamp.backend.security.CurrentUser;
 import za.co.ice.tamp.backend.web.dto.CreateTruckRequest;
 import za.co.ice.tamp.backend.web.dto.TruckResponse;
 import za.co.ice.tamp.backend.web.dto.UpdateTruckRequest;
 
 /**
- * CRUD for available trucks (FR-04, Transporter can create and view available trucks).
+ * CRUD for available trucks: a Transporter can create and view available trucks.
  *
  * <p>Talks directly to {@link TruckRepository} with no intervening service class, matching
  * #11's precedent for plain CRUD with a not-found check.
  *
- * <p>Deliberately unauthenticated: #9 (RBAC, role-based access control, and auth) owns role
- * enforcement and has not merged yet. {@code transporterId} is accepted as an explicit field/query
- * parameter rather than read from an authenticated principal for the same reason; both are
- * documented in the OpenAPI summaries as temporary, replaced once #9 lands.
+ * <p>Deliberately unauthenticated: #9 (RBAC, role-based access control, and auth) built login
+ * and JWT issuance but never wired role checks into this controller. {@code transporterId} is
+ * accepted as an explicit field/query parameter rather than read from an authenticated
+ * principal for the same reason; see known-limitations.md.
  */
 @RestController
 public class TruckController {
@@ -49,9 +51,12 @@ public class TruckController {
     }
 
     @PostMapping("/trucks")
-    public ResponseEntity<TruckResponse> create(@Valid @RequestBody CreateTruckRequest request) {
+    public ResponseEntity<TruckResponse> create(@Valid @RequestBody CreateTruckRequest request,
+            Authentication authentication) {
+        UUID transporterId = CurrentUser.requireIdOrFallback(
+                authentication, request.transporterId(), "transporterId");
         Truck truck = new Truck(
-                request.transporterId(),
+                transporterId,
                 request.vehicleType(),
                 request.capacityKg(),
                 request.capacityM3(),
@@ -69,7 +74,7 @@ public class TruckController {
         // would create two competing audit-writing paths to reconcile later. This call is
         // deliberately cheap to swap for that component once it exists.
         AuditLog audit = new AuditLog(
-                request.transporterId(), "TRUCK_POSTED", "truck", saved.getId(),
+                transporterId, "TRUCK_POSTED", "truck", saved.getId(),
                 // capacityKg as String, not BigDecimal: Hibernate dirty-checks JSON columns by
                 // round-tripping through the serializer, and BigDecimal comes back as a plain
                 // number — a false "dirty" that triggers an UPDATE the append-only trigger on
@@ -93,9 +98,10 @@ public class TruckController {
     }
 
     @GetMapping("/trucks")
-    public List<TruckResponse> listByTransporter(@RequestParam UUID transporterId) {
-        return truckRepository.findByTransporterId(transporterId).stream()
-                .map(TruckResponse::from).toList();
+    public List<TruckResponse> listByTransporter(@RequestParam UUID transporterId,
+            Authentication authentication) {
+        return truckRepository.findByTransporterId(CurrentUser.idOrFallback(authentication, transporterId))
+                .stream().map(TruckResponse::from).toList();
     }
 
     @PatchMapping("/trucks/{id}")

@@ -7,6 +7,6 @@ import za.co.ice.tamp.backend.persistence.entity.AuditLog;
 
 public interface AuditLogRepository extends JpaRepository<AuditLog, UUID> {
 
-    /** Backs FR-12: an admin views the trail for one entity regardless of whether it still exists. */
+    /** Backs an admin viewing the trail for one entity regardless of whether it still exists. */
     List<AuditLog> findByEntityTypeAndEntityId(String entityType, UUID entityId);
 }

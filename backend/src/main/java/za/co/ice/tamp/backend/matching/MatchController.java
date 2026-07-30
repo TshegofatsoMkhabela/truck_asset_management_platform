@@ -6,12 +6,14 @@ import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.parameters.RequestBody;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RestController;
+import za.co.ice.tamp.backend.security.CurrentUser;
 
 /**
- * FR-05: given a load, return the eligible, ranked trucks with reasons.
+ * Given a load, returns the eligible, ranked trucks with reasons.
  *
  * <p>No role annotation and no reference to a shared error response yet: both
  * depend on #9 (auth/RBAC), which has not merged. Recorded in
@@ -28,7 +30,7 @@ public class MatchController {
     }
 
     @Operation(
-            summary = "Generate rule-based matches for a load against available trucks (FR-05)",
+            summary = "Generate rule-based matches for a load against available trucks",
             description = "Fetches the load and every AVAILABLE truck, asks matching-service for "
                     + "eligible, ranked results, persists them, and records an audit event naming "
                     + "the requester, the load, and how many matches came back.",
@@ -38,8 +40,10 @@ public class MatchController {
     @PostMapping("/loads/{loadId}/matches")
     public List<MatchSummary> generateMatches(
             @PathVariable UUID loadId,
-            @org.springframework.web.bind.annotation.RequestBody GenerateMatchesRequest request) {
-        return coordinator.generateMatches(loadId, request.requestedBy()).stream()
+            @org.springframework.web.bind.annotation.RequestBody GenerateMatchesRequest request,
+            Authentication authentication) {
+        UUID requestedBy = CurrentUser.idOrFallback(authentication, request.requestedBy());
+        return coordinator.generateMatches(loadId, requestedBy).stream()
                 .map(MatchSummary::from)
                 .toList();
     }

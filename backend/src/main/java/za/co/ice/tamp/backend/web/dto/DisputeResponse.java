@@ -4,7 +4,7 @@ import java.time.OffsetDateTime;
 import java.util.UUID;
 import za.co.ice.tamp.backend.persistence.entity.Dispute;
 
-/** One flagged/disputed item as returned to an admin (FR-10, issue #17). */
+/** One flagged/disputed item as returned to an admin. */
 public record DisputeResponse(
         UUID id,
         UUID matchId,

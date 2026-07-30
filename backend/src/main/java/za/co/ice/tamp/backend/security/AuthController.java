@@ -42,7 +42,7 @@ public class AuthController {
     }
 
     @PostMapping("/register")
-    public ResponseEntity<UserResponse> register(@Valid @RequestBody RegisterRequest request) {
+    public ResponseEntity<AuthUserResponse> register(@Valid @RequestBody RegisterRequest request) {
         if (userRepository.findByEmail(request.email()).isPresent()) {
             throw new EmailAlreadyRegisteredException(request.email());
         }
@@ -57,7 +57,7 @@ public class AuthController {
         auditService.record(user.getId(), "REGISTERED", "User", user.getId(),
                 Map.of("email", user.getEmail(), "role", user.getRole()));
 
-        return ResponseEntity.status(HttpStatus.CREATED).body(UserResponse.from(user));
+        return ResponseEntity.status(HttpStatus.CREATED).body(AuthUserResponse.from(user));
     }
 
     @PostMapping("/login")
@@ -73,6 +73,6 @@ public class AuthController {
         String token = jwtService.issueToken(user.getId(), user.getRole());
         auditService.record(user.getId(), "LOGGED_IN", "User", user.getId(), Map.of());
 
-        return ResponseEntity.ok(new LoginResponse(token, UserResponse.from(user)));
+        return ResponseEntity.ok(new LoginResponse(token, AuthUserResponse.from(user)));
     }
 }

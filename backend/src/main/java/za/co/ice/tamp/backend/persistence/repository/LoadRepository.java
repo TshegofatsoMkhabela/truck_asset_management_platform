@@ -7,7 +7,7 @@ import za.co.ice.tamp.backend.persistence.entity.Load;
 
 public interface LoadRepository extends JpaRepository<Load, UUID> {
 
-    /** Backs FR-03: a Freight Owner views only their own postings. */
+    /** Backs a Freight Owner viewing only their own postings. */
     List<Load> findByOwnerId(UUID ownerId);
 
     List<Load> findByOwnerIdAndStatus(UUID ownerId, String status);

@@ -11,9 +11,10 @@ import za.co.ice.tamp.backend.persistence.entity.Receipt;
 import za.co.ice.tamp.backend.persistence.repository.AuditLogRepository;
 import za.co.ice.tamp.backend.persistence.repository.MatchRepository;
 import za.co.ice.tamp.backend.persistence.repository.ReceiptRepository;
+import za.co.ice.tamp.backend.web.MatchNotFoundException;
 
 /**
- * FR-06 and FR-07: turns a proposed match into a decided one, recording who decided and when,
+ * Turns a proposed match into a decided one, recording who decided and when,
  * issuing the receipt an acceptance produces, and writing the audit event that makes the
  * commitment traceable.
  *
@@ -42,7 +43,7 @@ public class AcceptanceCoordinator {
     /**
      * Transactional so the status change and the receipt commit together. Without it an
      * acceptance whose receipt insert failed would leave a match marked ACCEPTED with no
-     * confirmation to retrieve, which is precisely the inconsistency FR-07 exists to rule out.
+     * confirmation to retrieve, which is precisely the inconsistency this design rules out.
      *
      * <p>{@code ipAddress} and {@code userAgent} are nullable by design: the brief asks for
      * them "where available", so absence is valid data rather than a placeholder to invent.

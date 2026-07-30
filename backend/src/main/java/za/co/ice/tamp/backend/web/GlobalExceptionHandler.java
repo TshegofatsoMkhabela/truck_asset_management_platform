@@ -11,6 +11,7 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.server.ResponseStatusException;
 import za.co.ice.tamp.backend.security.EmailAlreadyRegisteredException;
 
 /**
@@ -28,6 +29,16 @@ public class GlobalExceptionHandler {
         }
         return respond(HttpStatus.BAD_REQUEST, "VALIDATION_FAILED",
                 "One or more fields failed validation", fieldErrors);
+    }
+
+    /**
+     * Covers {@link za.co.ice.tamp.backend.security.CurrentUser#requireIdOrFallback}: thrown
+     * when a request has neither a JWT nor the caller-supplied id field it stands in for.
+     */
+    @ExceptionHandler(ResponseStatusException.class)
+    public ResponseEntity<ApiError> handleResponseStatus(ResponseStatusException exception) {
+        return respond(HttpStatus.valueOf(exception.getStatusCode().value()),
+                "BAD_REQUEST", exception.getReason());
     }
 
     @ExceptionHandler(AuthenticationException.class)
