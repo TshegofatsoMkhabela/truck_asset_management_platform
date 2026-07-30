@@ -56,7 +56,8 @@ public class SecurityConfig {
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http.authorizeHttpRequests(authorize -> authorize
                         .requestMatchers("/health", "/", "/auth/register", "/auth/login", "/users", "/users/**",
-                                "/loads", "/loads/**", "/trucks", "/trucks/**").permitAll()
+                                "/loads", "/loads/**", "/trucks", "/trucks/**",
+                                "/matches/*/tracking").permitAll()
                         .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         .anyRequest().authenticated())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
