@@ -36,6 +36,12 @@ the row says so rather than carrying a placeholder.
 | T-23 | **Clean clone → `docker compose up --build -d` → `/health` on both backend and matching-service return 200** (issue #8 Minimum Integration Test) | backend + matching-service + db (docker) | All 3 containers `Up` (db `Healthy`); `curl :8080/health` and `curl :8000/health` both 200 | As expected, after one fix (see below) | ✅ Pass | #8 |
 | T-24 | matching-service's generated API docs page loads after `docker compose up` | matching-service (docker) | `curl :8000/docs` → 200 | As expected | ✅ Pass | #8 |
 | T-25 | orchestrator's Swagger UI loads after `docker compose up` | backend (docker) | 200 once #9 merges | Currently 404: `springdoc` is not on `main` yet | ⏳ Pending #9 | #8 |
+| T-26 | **Freight owner creates a load and retrieves the owner's complete list** (issue #11 Minimum Integration Test) | backend (web) | POST /loads returns 201 with full response; GET /loads?ownerId=X returns list containing the created load | As expected | ✅ Pass | #11 |
+| T-27 | `GET /loads/{id}` fetches a single load by ID | backend (web) | Fetch a created load by its ID, verify status (OPEN), origin, destination, weight in response | As expected | ✅ Pass | #11 |
+| T-28 | `PATCH /loads/{id}` updates load status only, without requiring re-entry of fields | backend (web) | Update status to MATCHED without sending originCity/destination; response includes original fields unchanged | As expected | ✅ Pass | #11 |
+| T-29 | `GET /loads/{id}` with unknown ID returns 404 | backend (web) | Random UUID in path returns 404 with error message | As expected | ✅ Pass | #11 |
+| T-30 | Creating a load writes an `audit_logs` row with action=LOAD_POSTED | backend (web) | POST /loads triggers insert into audit_logs with actorId=ownerId, action="LOAD_POSTED", entityType="load" | As expected | ✅ Pass | #11 |
+| T-31 | `POST /loads` rejects invalid cargo type, non-positive weight/volume, blank cities | backend (web) | DTO validation (Jakarta Bean Validation) rejects GENERAL+INVALID, weightKg=0, blank originCity (HTTP 400) | As expected | ✅ Pass | #11 |
 
 ### Evidence for T-19–T-22
 
@@ -202,7 +208,7 @@ executable lines a test run touched at least once.
 
 | Service | Tool | Line coverage | Gate | Status |
 |---|---|---|---|---|
-| backend | JaCoCo 0.8.12 | **93.5%** (200/214 lines) | 80% | ✅ Pass |
+| backend | JaCoCo 0.8.12 | **93.8%** (220/234 lines) | 80% | ✅ Pass |
 | matching-service | pytest-cov | **100%** (8/8 lines) | 80% | ✅ Pass |
 
 Reports are uploaded as CI artifacts (`coverage-backend`, `coverage-matching-service`)
