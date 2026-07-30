@@ -35,7 +35,13 @@ the row says so rather than carrying a placeholder.
 | T-22 | **The application starts against the dockerized local DB using only the `DB_URL`/`DB_USERNAME`/`DB_PASSWORD` config flags, and a basic read/write against it succeeds** (issue #7 Minimum Integration Test) | backend + db (docker) | App boots, Hibernate schema validation passes, `/health` returns 200; a direct `INSERT`/`SELECT`/`DELETE` against the same live database succeeds while the app remains connected | As expected | ✅ Pass | #7 |
 | T-23 | **Clean clone → `docker compose up --build -d` → `/health` on both backend and matching-service return 200** (issue #8 Minimum Integration Test) | backend + matching-service + db (docker) | All 3 containers `Up` (db `Healthy`); `curl :8080/health` and `curl :8000/health` both 200 | As expected, after one fix (see below) | ✅ Pass | #8 |
 | T-24 | matching-service's generated API docs page loads after `docker compose up` | matching-service (docker) | `curl :8000/docs` → 200 | As expected | ✅ Pass | #8 |
-| T-25 | orchestrator's Swagger UI loads after `docker compose up` | backend (docker) | 200 once #9 merges | Currently 404: `springdoc` is not on `main` yet | ⏳ Pending #9 | #8 |
+| T-25 | orchestrator's Swagger UI loads after `docker compose up` | backend (docker) | 200 once #9 merges | Currently 404 on `main` (`springdoc` lands with #10); confirmed 200 in #10's own manual run against a locally built image | ✅ Pass (see #10) | #8 |
+| T-26 | `PasswordEncoder` hashes rather than passing input through unchanged, and salts each call differently (2 tests) | backend | Encoded value never equals raw input; two encodings of the same input differ | As expected | ✅ Pass | #10 |
+| T-27 | `CreateUserRequest` bean validation rejects a blank name and a malformed email, and accepts a well-formed request (3 tests) | backend | Violations reported on the right field; a valid request produces none | As expected | ✅ Pass | #10 |
+| T-28 | **A user is created via `POST /users`, then fetched via `GET /users/{id}` and the data matches** (issue #10 Minimum Integration Test) | backend | 201 with `complianceStatus: PENDING`; subsequent GET returns the same `fullName`/`email`; stored `password_hash` is never the raw password | As expected | ✅ Pass | #10 |
+| T-29 | `GET /users/{id}` for an id with no matching row | backend | 404, not an unhandled 500 | As expected | ✅ Pass | #10 |
+| T-30 | `PATCH /users/{id}` with only `complianceStatus` set leaves `fullName` unchanged | backend | 200, `complianceStatus` updated, `fullName` untouched | As expected | ✅ Pass | #10 |
+| T-31 | `POST /users` with an email differing only in case from an existing user | backend | 409, not the raw `DataIntegrityViolationException` | As expected | ✅ Pass | #10 |
 
 ### Evidence for T-19–T-22
 
@@ -202,7 +208,7 @@ executable lines a test run touched at least once.
 
 | Service | Tool | Line coverage | Gate | Status |
 |---|---|---|---|---|
-| backend | JaCoCo 0.8.12 | **93.5%** (200/214 lines) | 80% | ✅ Pass |
+| backend | JaCoCo 0.8.12 | **94.5%** (240/254 lines) | 80% | ✅ Pass |
 | matching-service | pytest-cov | **100%** (8/8 lines) | 80% | ✅ Pass |
 
 Reports are uploaded as CI artifacts (`coverage-backend`, `coverage-matching-service`)
@@ -229,6 +235,12 @@ line as above), 3 in `InetAddressConverter`, and 1–4 each in `Dispute`, `Compl
 `Truck`, `User`, `Match` and `Load` — small enough per class that no single test is missing,
 this is the ordinary residue of entity accessors no test path happens to touch. All figures
 here are taken from the JaCoCo CSV directly, not estimated.
+
+It is now **94.5% (240/254)**, remeasured after #10 added `UserController`, its two DTOs
+(`CreateUserRequest`, `UpdateUserRequest`, `UserResponse`), `PasswordEncoderConfig` and
+`UserNotFoundException`, all fully exercised by `UserControllerTest` and
+`PasswordEncoderConfigTest`. The one new uncovered line sits in `User`'s existing accessors,
+the same kind of residue named above, not new dead code from this issue.
 
 ## Known defects
 
