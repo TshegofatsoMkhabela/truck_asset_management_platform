@@ -6,7 +6,7 @@ Maps each functional requirement to the code that implements it. Every row start
 
 | ID | Requirement | Priority | Implemented by | Tests | Status |
 |---|---|---|---|---|---|
-| FR-01 | Role-based registration/login for Freight Owner, Transporter and Admin | Must | — | — | Not implemented |
+| FR-01 | Role-based registration/login for Freight Owner, Transporter and Admin | Must | `POST /auth/register`, `POST /auth/login` (`AuthController`); RBAC enforced by `SecurityConfig` and `JwtAuthenticationFilter`; library choice recorded in [ADR 0003](adr/0003-authentication-and-rbac.md) | `AuthControllerTest`, `JwtServiceTest`, `JwtAuthenticationFilterTest`, `SecurityConfigTest` | Complete |
 | FR-02 | Basic identity/compliance information and simulated document upload or metadata | Must | — | — | Not implemented |
 | FR-03 | Freight Owner can create and view cargo loads | Must | — | — | Not implemented |
 | FR-04 | Transporter can create and view available trucks | Must | — | — | Not implemented |

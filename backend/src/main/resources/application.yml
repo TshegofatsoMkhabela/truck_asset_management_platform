@@ -16,6 +16,15 @@ spring:
 server:
   port: ${SERVER_PORT:8080}
 
+# JWT (JSON Web Token) signing. The default below is a dev-only placeholder, not a real
+# secret: no committed value is ever used outside a local run, and #8's docker-compose
+# setup is expected to set JWT_SECRET explicitly. Never used as-is anywhere but a
+# developer's own machine.
+security:
+  jwt:
+    secret: ${JWT_SECRET:dev-only-signing-key-do-not-use-in-production-0123456789}
+    expiration-minutes: ${JWT_EXPIRATION_MINUTES:60}
+
 # Where the Python matching-service lives. Overridden by the MATCHING_SERVICE_URL
 # environment variable so #8's Docker Compose can point this at a container
 # hostname without touching code.
