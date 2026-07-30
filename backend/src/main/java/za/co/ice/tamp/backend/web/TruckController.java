@@ -58,11 +58,11 @@ public class TruckController {
                 request.currentCity(),
                 request.availableFrom(),
                 request.availableUntil());
-        Truck saved = truckRepository.save(truck);
-        // Hibernate caches database-generated defaults (status, created_at, updated_at) in
-        // the persistence context but never re-reads them after an insert; refresh reads
-        // the actual database values without an extra query via findById.
-        entityManager.refresh(saved);
+        // Re-read after save: Hibernate never re-reads database-generated defaults (status,
+        // created_at, updated_at) after an insert, and entityManager.refresh() is not an
+        // option here — refresh requires an active transaction, and this controller method
+        // deliberately has none (each repository call commits on its own).
+        Truck saved = truckRepository.findById(truckRepository.save(truck).getId()).orElseThrow();
 
         // Written directly here, not through a shared audit-writing component: #9 (RBAC and
         // auth) is scoped to build that single reusable component, and duplicating it here
@@ -70,11 +70,18 @@ public class TruckController {
         // deliberately cheap to swap for that component once it exists.
         AuditLog audit = new AuditLog(
                 request.transporterId(), "TRUCK_POSTED", "truck", saved.getId(),
+                // capacityKg as String, not BigDecimal: Hibernate dirty-checks JSON columns by
+                // round-tripping through the serializer, and BigDecimal comes back as a plain
+                // number — a false "dirty" that triggers an UPDATE the append-only trigger on
+                // audit_logs rejects. Strings survive the round-trip unchanged.
                 Map.of("vehicleType", saved.getVehicleType(),
-                        "capacityKg", saved.getCapacityKg(),
+                        "capacityKg", saved.getCapacityKg().toPlainString(),
                         "currentCity", saved.getCurrentCity()));
         auditLogRepository.save(audit);
-        // Detach so Hibernate won't try to UPDATE it later (audit_logs is append-only).
+        // Not dead code: open-in-view keeps one persistence context alive for the whole
+        // request, and Hibernate's dirty check on the JSON details map always reports
+        // changed, so without detach it issues an UPDATE at flush — which the append-only
+        // trigger on audit_logs rejects.
         entityManager.detach(audit);
 
         return ResponseEntity.status(HttpStatus.CREATED).body(TruckResponse.from(saved));
