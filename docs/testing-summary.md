@@ -67,12 +67,21 @@ the row says so rather than carrying a placeholder.
 | T-54 | The decision endpoint returns the right status for each outcome a caller can trigger: success, unknown match, already decided, an invalid decision value, and an `actorId` naming no existing user (5 tests) | backend | 200, 404, 409, 400, 400 respectively. The last was added by this issue's own adversarial review, which found it returned 500 | As expected | ✅ Pass | #14 |
 | T-55 | **A match is accepted via the API, then its receipt is fetched and contains the right match, actor and a generated contract ID** (issue #14 Minimum Integration Test), and a rejection issues no receipt (2 tests) | backend | Receipt returns `contractId` starting `TAMP-`, plus the captured IP and user-agent; a rejected match returns 404 from the receipt endpoint | As expected | ✅ Pass | #14 |
 | T-56 | The full post-acceptance journey runs against the seeded database over real HTTP: accept, fetch receipt, advance a trip through three stages, read it back, and every guard refuses correctly | backend + db (docker) | Real contract ID issued; 3 tracking events returned in order; 409 on re-decide, 409 on tracking a proposed match, 400 on an unknown status, 404 on a missing receipt | As expected, see evidence below | ✅ Pass | #14/#15 |
-| T-57 | **Both parties submit ratings for a completed match and retrieve them** (issue #16 Minimum Integration Test) | backend (web) | POST /matches/{id}/ratings with rater/ratee IDs and score 1-5; GET /matches/{id}/ratings returns all submitted ratings | As expected | ✅ Pass | #16 |
-| T-58 | `GET /users/{userId}/ratings` returns all ratings received by that user | backend (web) | Query user as ratee, fetch ratings where rateeId=userId, verify scores and comments persist | As expected | ✅ Pass | #16 |
-| T-59 | `POST /matches/{id}/disputes` creates a dispute with description, status defaults to OPEN | backend (web) | 201 with full dispute; status, resolutionNote, resolvedBy are null initially | As expected | ✅ Pass | #16 |
-| T-60 | `GET /disputes` returns only OPEN disputes for the admin queue | backend (web) | Filter applies; closed disputes excluded; dispute list queryable by status | As expected | ✅ Pass | #16 |
-| T-61 | `GET /disputes/{id}` fetches a single dispute and returns 404 for unknown ID | backend (web) | Fetch by ID returns full dispute; invalid UUID returns 404 with error message | As expected | ✅ Pass | #16 |
-| T-62 | Creating a dispute writes an `audit_logs` row with action=DISPUTE_RAISED | backend (web) | POST /disputes triggers insert into audit_logs with actorId=raisedBy, action="DISPUTE_RAISED", entityType="dispute" | As expected | ✅ Pass | #16 |
+| T-57 | `GlobalExceptionHandler` maps a validation failure, an authentication failure and an access-denial to the documented `ApiError` shape with the correct status (3 tests) | backend | 400/401/403 with `status`, `error`, `message`, `fieldErrors` populated as appropriate | As expected | ✅ Pass | #9 |
+| T-58 | `AuditService.record` writes an `AuditLog` with the actor, action, entity type/id and details it was given | backend | Saved entity's fields match the call arguments exactly | As expected | ✅ Pass | #9 |
+| T-59 | `POST /auth/register` hashes the password (never stores or returns it), writes a `REGISTERED` audit event, rejects a blank field with the documented validation shape, and rejects a duplicate email with 409 (4 tests) | backend | Stored hash starts with `$2` (BCrypt) and differs from the raw password; exactly one audit row; 400 with `fieldErrors.fullName` on a blank name; 409 `EMAIL_ALREADY_REGISTERED` on a repeat email | As expected | ✅ Pass | #9 |
+| T-60 | `JwtService` issues a token that parses back to the same user id and role via both the individual accessors and the combined `parseToken`, and rejects a token signed with a different key (3 tests) | backend | Round-trip matches; cross-key token throws `SignatureException` | As expected | ✅ Pass | #9 |
+| T-61 | `POST /auth/login` returns a token and the user for valid credentials, returns the documented 401 shape for a wrong password and for an unknown email with the same body, and writes a `LOGGED_IN` audit event (4 tests) | backend | 200 with `token`/`user`; 401 `UNAUTHENTICATED` for a wrong password and for an unknown email, both with identical body; one `LOGGED_IN` row after login | As expected | ✅ Pass | #9 |
+| T-62 | `JwtAuthenticationFilter` authenticates a request carrying a valid bearer token, leaves the security context empty for a missing, malformed, or JWT-rejected header, and propagates (rather than swallows) an unrelated `RuntimeException` from `JwtService` (5 tests) | backend | Context holds the token's user id and `ROLE_<role>` only for a genuinely valid bearer token; a non-JWT exception is not caught | As expected | ✅ Pass | #9 |
+| T-63 | The filter chain keeps `/health`, `/`, `/auth/register` and `/auth/login` public while rejecting an unauthenticated request to any other path with 401 (4 tests) | backend | Public routes 200/400; unlisted route 401 with the documented shape | As expected | ✅ Pass | #9 |
+| T-64 | **`GET /audit` allows an Admin token, rejects a non-Admin token with 403, and rejects a missing token with 401** (issue #9 Minimum Integration Test, 3 tests) | backend | 200 for Admin; 403 `ACCESS_DENIED` for a Transporter; 401 `UNAUTHENTICATED` for no token | As expected | ✅ Pass | #9 |
+| T-65 | The generated OpenAPI description lists `/auth/register`, `/auth/login` and `/audit` and declares the `bearerAuth` scheme; Swagger UI's page loads, both without a token (2 tests) | backend | 200 for `/v3/api-docs` and `/swagger-ui/index.html`; `components.securitySchemes.bearerAuth.scheme` is `bearer` | As expected | ✅ Pass | #9 |
+| T-66 | **Both parties submit ratings for a completed match and retrieve them** (issue #16 Minimum Integration Test) | backend (web) | POST /matches/{id}/ratings with rater/ratee IDs and score 1-5; GET /matches/{id}/ratings returns all submitted ratings | As expected | ✅ Pass | #16 |
+| T-67 | `GET /users/{userId}/ratings` returns all ratings received by that user | backend (web) | Query user as ratee, fetch ratings where rateeId=userId, verify scores and comments persist | As expected | ✅ Pass | #16 |
+| T-68 | `POST /matches/{id}/disputes` creates a dispute with description, status defaults to OPEN | backend (web) | 201 with full dispute; status, resolutionNote, resolvedBy are null initially | As expected | ✅ Pass | #16 |
+| T-69 | `GET /disputes` returns only OPEN disputes for the admin queue | backend (web) | Filter applies; closed disputes excluded; dispute list queryable by status | As expected | ✅ Pass | #16 |
+| T-70 | `GET /disputes/{id}` fetches a single dispute and returns 404 for unknown ID | backend (web) | Fetch by ID returns full dispute; invalid UUID returns 404 with error message | As expected | ✅ Pass | #16 |
+| T-71 | Creating a dispute writes an `audit_logs` row with action=DISPUTE_RAISED | backend (web) | POST /disputes triggers insert into audit_logs with actorId=raisedBy, action="DISPUTE_RAISED", entityType="dispute" | As expected | ✅ Pass | #16 |
 
 ### Evidence for T-19–T-22
 
@@ -287,7 +296,7 @@ executable lines a test run touched at least once.
 
 | Service | Tool | Line coverage | Gate | Status |
 |---|---|---|---|---|
-| backend | JaCoCo 0.8.12 | **93.9%** (587/625 lines) | 80% | ✅ Pass |
+| backend | JaCoCo 0.8.12 | **94.6%** (721/762 lines) | 80% | ✅ Pass |
 | matching-service | pytest-cov | **100%** (165/165 lines) | 80% | ✅ Pass |
 
 Reports are uploaded as CI artifacts (`coverage-backend`, `coverage-matching-service`)
@@ -321,18 +330,12 @@ coordinator (where the actual logic lives) is already fully covered and the cont
 method is a two-line pass-through. All figures here are taken from the JaCoCo CSV directly,
 not estimated.
 
-It is now **97.9% (559/571)**, remeasured on the merged tree carrying #14's acceptance and receipts, #33's tracking, #11's loads, #12's trucks and #17's admin endpoints. Measured on the merge rather than carried over from either side, since the bundle is neither one alone.
-
 **Correction to a figure this table carried for four issues.** #13's row read "91.2% (936/1026 lines)", #11 carried the same shape forward as "91.1% (936/1026 lines)", and #17 recorded "96% (1919/1992 instructions)", which is correctly labelled but still sat under a column headed "Line coverage" next to a gate configured on lines. That number was *instruction* coverage, not line coverage: it was summed from columns 4 and 5 of `jacoco.csv` (`INSTRUCTION_MISSED`/`INSTRUCTION_COVERED`) rather than columns 8 and 9. The JaCoCo gate itself is configured on `<counter>LINE</counter>`, so the build was always measuring the right thing and nothing was ever passed that should have failed. Only the hand-written summary read the wrong columns, which is exactly why the error stayed invisible: a wrong number in a document fails no test. Every figure in this table is now taken from columns 8 and 9. The identical 936/1026 appearing under two different percentages across separate issues is the tell that it was being copied forward rather than remeasured.
 
-The superseded #13 paragraph, kept for the record: measured after merging #10's user/profile work
-(`UserController`, `CreateUserRequest`, `UpdateUserRequest`, `UserResponse`,
-`PasswordEncoderConfig`, `UserNotFoundException`) and #8's Dockerfiles into #13's branch.
-The percentage moved because the two feature sets landed independently and the bundle
-measured here is neither one alone; `mvn clean verify` was rerun against the merged tree
-rather than assuming the two issues' figures would simply add up. It is now
-**96% (1919/1992 instructions)**, remeasured after merging #11's load postings, #12's trucks
-endpoint, #15's tracking endpoints and #17's admin console into that same tree.
+It is now **97.9% (693/708 lines)**, remeasured on the merged tree carrying #9's auth/RBAC/audit
+trail, #14's acceptance and receipts, #15's tracking, #11's loads, #12's trucks and #17's admin
+endpoints. Measured on the merge rather than carried over from either side, since the bundle is
+neither one alone.
 
 ## Known defects
 

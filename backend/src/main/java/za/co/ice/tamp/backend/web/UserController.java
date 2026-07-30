@@ -7,11 +7,9 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import jakarta.validation.Valid;
 import java.util.UUID;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -113,20 +111,4 @@ public class UserController {
         return userRepository.findById(id).orElseThrow(() -> new UserNotFoundException(id));
     }
 
-    @ExceptionHandler(UserNotFoundException.class)
-    public ResponseEntity<String> handleNotFound(UserNotFoundException ex) {
-        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ex.getMessage());
-    }
-
-    /**
-     * Temporary, controller-scoped: #9 (RBAC and auth) owns the single global error shape
-     * (timestamp, status, error code, message, field errors) that every endpoint should
-     * eventually share. This handler exists only so #10 can be demoed and Swagger-tested
-     * today; it is deleted, not merged around, the moment #9's {@code @ControllerAdvice}
-     * lands, since that handler will cover this same exception type globally.
-     */
-    @ExceptionHandler(DataIntegrityViolationException.class)
-    public ResponseEntity<String> handleDuplicateEmail(DataIntegrityViolationException ex) {
-        return ResponseEntity.status(HttpStatus.CONFLICT).body("A user with this email already exists");
-    }
 }
