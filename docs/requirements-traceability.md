@@ -11,9 +11,9 @@ Maps each functional requirement to the code that implements it. Every row start
 | FR-03 | Freight Owner can create and view cargo loads | Must | — | — | Not implemented |
 | FR-04 | Transporter can create and view available trucks | Must | — | — | Not implemented |
 | FR-05 | Rule-based matching using compatibility, location and availability | Must | `matching_service.rules.find_eligible_matches` (matching-service), `POST /loads/{loadId}/matches` (`MatchController`, orchestrator) | `test_rules.py` (6 tests), `test_match.py` (2 tests), `MatchingServiceClientTest`, `MatchingCoordinatorTest` (2 tests), `MatchingTimingE2ETest` | Complete |
-| FR-06 | Users can accept or reject a match and the decision is logged | Must | — | — | Not implemented |
-| FR-07 | Accepted match produces a digital confirmation receipt | Must | — | — | Not implemented |
-| FR-08 | Trip tracking simulated using mock coordinates or status progression | Must | — | — | Not implemented |
+| FR-06 | Users can accept or reject a match and the decision is logged | Must | `POST /matches/{matchId}/decision` (`AcceptanceController`) | `AcceptanceCoordinatorTest` (3 tests), `AcceptanceControllerTest` (4 tests) | Complete |
+| FR-07 | Accepted match produces a digital confirmation receipt | Must | `GET /matches/{matchId}/receipt` (`AcceptanceController`), issued by `AcceptanceCoordinator.decide(...)` | `ReceiptTest` (2 tests) | Complete |
+| FR-08 | Trip tracking simulated using mock coordinates or status progression | Must | `POST /matches/{matchId}/tracking`, `GET /matches/{matchId}/tracking` (`TrackingController`) | `TrackingTest` (4 tests) | Complete |
 | FR-09 | Parties can rate/review one another after completion | Should | — | — | Not implemented |
 | FR-10 | Admin can manage users, compliance status and flagged/disputed items | Must | — | — | Not implemented |
 | FR-11 | Admin can view basic platform metrics | Must | — | — | Not implemented |
