@@ -47,11 +47,14 @@ jobs:
           java-version: '21'
           distribution: temurin
 
+      # config-file carries the per-query exclusions; each one must be justified
+      # there, since excluding at scan time is the only way past the SARIF gate below.
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
         with:
           languages: ${{ matrix.language }}
           build-mode: ${{ matrix.build-mode }}
+          config-file: ./.github/codeql/codeql-config.yml
 
       - name: Autobuild
         if: matrix.build-mode == 'autobuild'
