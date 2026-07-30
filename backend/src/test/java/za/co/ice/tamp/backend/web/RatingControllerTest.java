@@ -56,7 +56,9 @@ class RatingControllerTest extends JpaTestBase {
     @Autowired
     private RatingRepository ratingRepository;
 
-    private UUID seedUsers(String ownerEmail, String transporterEmail) {
+    private UUID seedUsers() {
+        String ownerEmail = "owner." + UUID.randomUUID() + "@test.com";
+        String transporterEmail = "transporter." + UUID.randomUUID() + "@test.com";
         User owner = userRepository.save(
                 new User("Owner", ownerEmail, "hash1", "FREIGHT_OWNER"));
         userRepository.save(
@@ -65,8 +67,11 @@ class RatingControllerTest extends JpaTestBase {
     }
 
     private UUID seedMatch() {
-        UUID ownerId = seedUsers("owner@test.com", "transporter@test.com");
-        User transporter = userRepository.findByEmail("transporter@test.com").orElseThrow();
+        UUID ownerId = seedUsers();
+        User transporter = userRepository.findAll().stream()
+                .filter(u -> "TRANSPORTER".equals(u.getRole()))
+                .findFirst()
+                .orElseThrow();
 
         Load load = loadRepository.save(new Load(
                 ownerId, "Johannesburg", "Cape Town", "GENERAL",
@@ -102,8 +107,14 @@ class RatingControllerTest extends JpaTestBase {
     @Test
     void submitsRatingForCompletedMatch() throws Exception {
         UUID matchId = seedMatch();
-        User owner = userRepository.findByEmail("owner@test.com").orElseThrow();
-        User transporter = userRepository.findByEmail("transporter@test.com").orElseThrow();
+        User transporter = userRepository.findAll().stream()
+                .filter(u -> "TRANSPORTER".equals(u.getRole()))
+                .findFirst()
+                .orElseThrow();
+        User owner = userRepository.findAll().stream()
+                .filter(u -> "FREIGHT_OWNER".equals(u.getRole()))
+                .findFirst()
+                .orElseThrow();
 
         MvcResult result = mockMvc.perform(
                         post("/matches/{matchId}/ratings", matchId)
@@ -124,5 +135,63 @@ class RatingControllerTest extends JpaTestBase {
         assertThat(rating.getComment()).isEqualTo("Excellent service");
         assertThat(rating.getRaterId()).isEqualTo(transporter.getId());
         assertThat(rating.getRateeId()).isEqualTo(owner.getId());
+    }
+
+    @Test
+    void listRatingsForMatch() throws Exception {
+        UUID matchId = seedMatch();
+        User transporter = userRepository.findAll().stream()
+                .filter(u -> "TRANSPORTER".equals(u.getRole()))
+                .findFirst()
+                .orElseThrow();
+        User owner = userRepository.findAll().stream()
+                .filter(u -> "FREIGHT_OWNER".equals(u.getRole()))
+                .findFirst()
+                .orElseThrow();
+
+        // Submit rating from transporter to owner
+        mockMvc.perform(
+                        post("/matches/{matchId}/ratings", matchId)
+                                .param("raterId", transporter.getId().toString())
+                                .param("rateeId", owner.getId().toString())
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(ratingBody((short) 5, "Great")))
+                .andExpect(status().isCreated());
+
+        // Fetch all ratings for this match
+        mockMvc.perform(get("/matches/{matchId}/ratings", matchId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", org.hamcrest.Matchers.hasSize(1)))
+                .andExpect(jsonPath("$[0].score").value(5))
+                .andExpect(jsonPath("$[0].comment").value("Great"));
+    }
+
+    @Test
+    void listRatingsForUser() throws Exception {
+        UUID matchId = seedMatch();
+        User transporter = userRepository.findAll().stream()
+                .filter(u -> "TRANSPORTER".equals(u.getRole()))
+                .findFirst()
+                .orElseThrow();
+        User owner = userRepository.findAll().stream()
+                .filter(u -> "FREIGHT_OWNER".equals(u.getRole()))
+                .findFirst()
+                .orElseThrow();
+
+        // Submit rating from transporter to owner
+        mockMvc.perform(
+                        post("/matches/{matchId}/ratings", matchId)
+                                .param("raterId", transporter.getId().toString())
+                                .param("rateeId", owner.getId().toString())
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(ratingBody((short) 4, "Good")))
+                .andExpect(status().isCreated());
+
+        // Fetch all ratings for the owner (as ratee)
+        mockMvc.perform(get("/users/{userId}/ratings", owner.getId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", org.hamcrest.Matchers.hasSize(1)))
+                .andExpect(jsonPath("$[0].score").value(4))
+                .andExpect(jsonPath("$[0].rateeId").value(owner.getId().toString()));
     }
 }
