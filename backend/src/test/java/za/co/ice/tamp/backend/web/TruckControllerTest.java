@@ -9,24 +9,22 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import za.co.ice.tamp.backend.persistence.JpaTestBase;
 import za.co.ice.tamp.backend.persistence.entity.Truck;
-import za.co.ice.tamp.backend.persistence.repository.AuditLogRepository;
+import za.co.ice.tamp.backend.persistence.entity.User;
 import za.co.ice.tamp.backend.persistence.repository.TruckRepository;
+import za.co.ice.tamp.backend.persistence.repository.UserRepository;
 import za.co.ice.tamp.backend.web.dto.CreateTruckRequest;
 import za.co.ice.tamp.backend.web.dto.TruckResponse;
 import za.co.ice.tamp.backend.web.dto.UpdateTruckRequest;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@SpringBootTest
 @AutoConfigureMockMvc
-@ActiveProfiles("test")
-class TruckControllerTest {
+class TruckControllerTest extends JpaTestBase {
 
     @Autowired
     private MockMvc mockMvc;
@@ -35,17 +33,29 @@ class TruckControllerTest {
     private TruckRepository truckRepository;
 
     @Autowired
-    private AuditLogRepository auditLogRepository;
+    private UserRepository userRepository;
 
     @Autowired
     private ObjectMapper objectMapper;
 
+    /**
+     * trucks.transporter_id is a real foreign key to users(id), so every truck in these
+     * tests needs a persisted user first — a random UUID is rejected by the database.
+     * Email is randomised because users.email is unique and the container is shared
+     * across all test classes.
+     */
+    private UUID persistTransporter() {
+        User user = new User("Test Transporter", "transporter-" + UUID.randomUUID() + "@example.com",
+                "not-a-real-hash", "TRANSPORTER");
+        return userRepository.save(user).getId();
+    }
+
     @Test
     void postTruck_createsAndReturns201() throws Exception {
-        UUID transporterId = UUID.randomUUID();
+        UUID transporterId = persistTransporter();
         CreateTruckRequest request = new CreateTruckRequest(
                 transporterId,
-                "Box Truck",
+                "CONTAINER",
                 new BigDecimal("5000"),
                 new BigDecimal("20"),
                 "Johannesburg",
@@ -61,16 +71,16 @@ class TruckControllerTest {
         TruckResponse truckResponse = objectMapper.readValue(response, TruckResponse.class);
         assertNotNull(truckResponse.id());
         assertEquals(transporterId, truckResponse.transporterId());
-        assertEquals("Box Truck", truckResponse.vehicleType());
+        assertEquals("CONTAINER", truckResponse.vehicleType());
         assertEquals("Johannesburg", truckResponse.currentCity());
     }
 
     @Test
     void getTruck_returnsExistingTruck() throws Exception {
-        UUID transporterId = UUID.randomUUID();
+        UUID transporterId = persistTransporter();
         Truck truck = new Truck(
                 transporterId,
-                "Flatbed",
+                "FLATBED",
                 new BigDecimal("8000"),
                 null,
                 "Cape Town",
@@ -81,7 +91,7 @@ class TruckControllerTest {
         mockMvc.perform(get("/trucks/" + saved.getId()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(saved.getId().toString()))
-                .andExpect(jsonPath("$.vehicleType").value("Flatbed"));
+                .andExpect(jsonPath("$.vehicleType").value("FLATBED"));
     }
 
     @Test
@@ -93,15 +103,16 @@ class TruckControllerTest {
 
     @Test
     void listTrucksByTransporter_returnsMatchingTrucks() throws Exception {
-        UUID transporterId1 = UUID.randomUUID();
-        UUID transporterId2 = UUID.randomUUID();
+        UUID transporterId1 = persistTransporter();
+        UUID transporterId2 = persistTransporter();
 
-        Truck truck1 = new Truck(transporterId1, "Van", new BigDecimal("3000"), new BigDecimal("15"),
-                "Durban", OffsetDateTime.now(), OffsetDateTime.now().plusHours(48));
-        Truck truck2 = new Truck(transporterId1, "Box Truck", new BigDecimal("5000"),
+        Truck truck1 = new Truck(transporterId1, "CURTAIN_SIDE", new BigDecimal("3000"),
+                new BigDecimal("15"), "Durban", OffsetDateTime.now(),
+                OffsetDateTime.now().plusHours(48));
+        Truck truck2 = new Truck(transporterId1, "CONTAINER", new BigDecimal("5000"),
                 new BigDecimal("20"), "Johannesburg", OffsetDateTime.now(),
                 OffsetDateTime.now().plusHours(48));
-        Truck truck3 = new Truck(transporterId2, "Tanker", new BigDecimal("10000"), null,
+        Truck truck3 = new Truck(transporterId2, "TANKER", new BigDecimal("10000"), null,
                 "Pretoria", OffsetDateTime.now(), OffsetDateTime.now().plusHours(48));
 
         truckRepository.saveAll(List.of(truck1, truck2, truck3));
@@ -119,10 +130,10 @@ class TruckControllerTest {
 
     @Test
     void patchTruck_updatesStatus() throws Exception {
-        UUID transporterId = UUID.randomUUID();
+        UUID transporterId = persistTransporter();
         Truck truck = new Truck(
                 transporterId,
-                "Pickup",
+                "TIPPER",
                 new BigDecimal("2000"),
                 new BigDecimal("8"),
                 "Soweto",
@@ -130,15 +141,15 @@ class TruckControllerTest {
                 OffsetDateTime.now().plusHours(24));
         Truck saved = truckRepository.save(truck);
 
-        UpdateTruckRequest updateRequest = new UpdateTruckRequest("in-use");
+        UpdateTruckRequest updateRequest = new UpdateTruckRequest("MATCHED");
         mockMvc.perform(patch("/trucks/" + saved.getId())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(updateRequest)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("in-use"));
+                .andExpect(jsonPath("$.status").value("MATCHED"));
 
         Truck updated = truckRepository.findById(saved.getId()).orElseThrow();
-        assertEquals("in-use", updated.getStatus());
+        assertEquals("MATCHED", updated.getStatus());
     }
 
     @Test
