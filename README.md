@@ -118,6 +118,8 @@ curl http://localhost:8080/health
 # {"status":"UP","service":"backend"}
 ```
 
+Interactive API docs are served at <http://localhost:8080/swagger-ui/index.html>.
+
 ### Matching service (Python)
 
 ```bash
@@ -149,28 +151,38 @@ Both services expose `/health` with the same `{"status","service"}` shape, so co
 healthchecks configure one contract rather than two. It is deliberately unauthenticated —
 a probe requiring credentials is useless to the tool that must poll it.
 
-## Cross-service call
+## Matching (FR-05)
 
-The orchestrator reaches matching-service over HTTP. With both services running:
+The orchestrator reaches matching-service over HTTP to generate rule-based matches for a
+load. With both services running and the seeded database up:
 
 ```bash
-curl http://localhost:8080/integration/ping
-# {"service":"matching-service","pong":true}
+curl -X POST http://localhost:8080/loads/00000000-0000-7000-8000-000000000011/matches \
+  -H "Content-Type: application/json" \
+  -d '{"requestedBy": "00000000-0000-7000-8000-000000000001"}'
+```
+```json
+[{"id":"...","truckId":"00000000-0000-7000-8000-000000000021","score":25.0,
+  "reasons":["truck capacity 10000.0kg sufficient for 8000.0kg load",
+             "REFRIGERATED is compatible with REFRIGERATED cargo",
+             "availability windows overlap the pickup window",
+             "truck is already in the origin city (Cape Town)"]}]
 ```
 
-The response says `matching-service`, not `backend` — that is the point: it proves the
-orchestrator really made the hop rather than answering for itself.
-
-The target is configured by `MATCHING_SERVICE_URL` (default `http://localhost:8000`),
+The load and the expected matching truck are both from #7's seed data. The target
+matching-service is configured by `MATCHING_SERVICE_URL` (default `http://localhost:8000`),
 so Docker Compose in #8 can repoint it at a container hostname without a code change:
 
 ```bash
 MATCHING_SERVICE_URL=http://localhost:8010 mvn spring-boot:run
 ```
 
-`/integration/ping` and matching-service's `/ping` are temporary scaffolding for #5 and
-are replaced by the real matching endpoint in #13. See
-[Testing Summary](docs/testing-summary.md) for how to run the end-to-end test.
+No role restriction yet: `requestedBy` stands in for an authenticated caller until #9
+lands. See [Known Limitations](docs/known-limitations.md).
+
+This replaced #5's dummy `/integration/ping` round trip, which existed only to prove the
+network hop worked before there was any real logic behind it. See
+[Testing Summary](docs/testing-summary.md) for how to run the end-to-end and timing tests.
 
 ## Documentation
 
