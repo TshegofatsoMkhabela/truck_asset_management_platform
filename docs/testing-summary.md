@@ -228,7 +228,7 @@ executable lines a test run touched at least once.
 
 | Service | Tool | Line coverage | Gate | Status |
 |---|---|---|---|---|
-| backend | JaCoCo 0.8.12 | **96%** (2135/2221 instructions) | 80% | ✅ Pass |
+| backend | JaCoCo 0.8.12 | **96.9%** (533/550 lines) | 80% | ✅ Pass |
 | matching-service | pytest-cov | **100%** (165/165 lines) | 80% | ✅ Pass |
 
 Reports are uploaded as CI artifacts (`coverage-backend`, `coverage-matching-service`)
@@ -249,11 +249,10 @@ The backend figure was recorded as 100% (4/4 lines) when #2 landed, then 95% (19
 #6's schema tests were measured against the merged state of #2/#4/#5, then 93.5% (200/214)
 once #6 grew to include the JPA persistence layer. It reached 92.6% (249/269) once #13 added
 the matching coordinator, controller and DTOs and removed `IntegrationController`, then
-91.2% (936/1026) once #10's user/profile work and #8's Dockerfiles landed in the same tree,
-then 94% (1617/1717 instructions) once #9's auth, RBAC, audit trail and OpenAPI documentation
-code merged in alongside. It is now **96% (2135/2221 instructions)**, remeasured after merging
-#11's load postings and #12's trucks endpoint into that same tree. All figures here are taken
-from the JaCoCo CSV directly, not estimated.
+91.2% (936/1026) once #10's user/profile work and #8's Dockerfiles landed in the same tree.
+It is now **96.9% (533/550 lines)**, remeasured after merging #9's auth, RBAC, audit trail and
+OpenAPI documentation code alongside #11's load postings and #12's trucks endpoint into that
+same tree. All figures here are taken from the JaCoCo CSV directly, not estimated.
 
 ## Known defects
 
