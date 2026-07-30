@@ -87,8 +87,22 @@ public class User {
         return role;
     }
 
+    public String getPasswordHash() {
+        return passwordHash;
+    }
+
     public String getComplianceStatus() {
         return complianceStatus;
+    }
+
+    /** Overwrites only the fields a {@code PATCH /users/{id}} caller actually supplied. */
+    public void applyUpdate(String fullName, String complianceStatus) {
+        if (fullName != null) {
+            this.fullName = fullName;
+        }
+        if (complianceStatus != null) {
+            this.complianceStatus = complianceStatus;
+        }
     }
 
     public OffsetDateTime getCreatedAt() {
