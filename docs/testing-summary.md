@@ -53,6 +53,11 @@ the row says so rather than carrying a placeholder.
 | T-40 | `GET /loads/{id}` with unknown ID returns 404 | backend (web) | Random UUID in path returns 404 with error message | As expected | ✅ Pass | #11 |
 | T-41 | Creating a load writes an `audit_logs` row with action=LOAD_POSTED | backend (web) | POST /loads triggers insert into audit_logs with actorId=ownerId, action="LOAD_POSTED", entityType="load" | As expected | ✅ Pass | #11 |
 | T-42 | `POST /loads` rejects invalid cargo type, non-positive weight/volume, blank cities | backend (web) | DTO validation (Jakarta Bean Validation) rejects GENERAL+INVALID, weightKg=0, blank originCity (HTTP 400) | As expected | ✅ Pass | #11 |
+| T-43 | **Advance a match's tracking status via the API, fetch it back, and confirm it persisted** (issue #15 Minimum Integration Test) | backend (web) | Two POSTs (IN_TRANSIT then DELIVERED) to `/matches/{id}/tracking` each return 201; GET returns both events oldest-first | As expected | ✅ Pass | #15 |
+| T-44 | A position-only event (coordinates, no status) is accepted, matching the schema's "position or status" rule | backend (web) | 201 with the coordinates echoed and `status` null | As expected | ✅ Pass | #15 |
+| T-45 | An event carrying neither a status nor a coordinate pair is rejected before reaching the database | backend (web) | 400 from DTO validation, not a database-constraint 500 | As expected | ✅ Pass | #15 |
+| T-46 | Tracking a match that exists but is not ACCEPTED is refused | backend (web) | 409 with a message naming the match's actual status | As expected | ✅ Pass | #15 |
+| T-47 | Tracking endpoints with an unknown match id return 404 on both POST and GET | backend (web) | 404, not an unhandled 500 | As expected | ✅ Pass | #15 |
 
 ### Evidence for T-19–T-22
 
