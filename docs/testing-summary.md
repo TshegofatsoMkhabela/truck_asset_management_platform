@@ -58,12 +58,17 @@ the row says so rather than carrying a placeholder.
 | T-45 | An event carrying neither a status nor a coordinate pair is rejected before reaching the database | backend (web) | 400 from DTO validation, not a database-constraint 500 | As expected | ✅ Pass | #15 |
 | T-46 | Tracking a match that exists but is not ACCEPTED is refused | backend (web) | 409 with a message naming the match's actual status | As expected | ✅ Pass | #15 |
 | T-47 | Tracking endpoints with an unknown match id return 404 on both POST and GET | backend (web) | 404, not an unhandled 500 | As expected | ✅ Pass | #15 |
-| T-48 | **Both parties submit ratings for a completed match and retrieve them** (issue #16 Minimum Integration Test) | backend (web) | POST /matches/{id}/ratings with rater/ratee IDs and score 1-5; GET /matches/{id}/ratings returns all submitted ratings | As expected | ✅ Pass | #16 |
-| T-49 | `GET /users/{userId}/ratings` returns all ratings received by that user | backend (web) | Query user as ratee, fetch ratings where rateeId=userId, verify scores and comments persist | As expected | ✅ Pass | #16 |
-| T-50 | `POST /matches/{id}/disputes` creates a dispute with description, status defaults to OPEN | backend (web) | 201 with full dispute; status, resolutionNote, resolvedBy are null initially | As expected | ✅ Pass | #16 |
-| T-51 | `GET /disputes` returns only OPEN disputes for the admin queue | backend (web) | Filter applies; closed disputes excluded; dispute list queryable by status | As expected | ✅ Pass | #16 |
-| T-52 | `GET /disputes/{id}` fetches a single dispute and returns 404 for unknown ID | backend (web) | Fetch by ID returns full dispute; invalid UUID returns 404 with error message | As expected | ✅ Pass | #16 |
-| T-53 | Creating a dispute writes an `audit_logs` row with action=DISPUTE_RAISED | backend (web) | POST /disputes triggers insert into audit_logs with actorId=raisedBy, action="DISPUTE_RAISED", entityType="dispute" | As expected | ✅ Pass | #16 |
+| T-48 | **Admin reads `/admin/metrics` and the counts cover the rows seeded in the test; a non-admin is rejected from the same endpoint** (issue #17 Minimum Integration Test, with T-49) | backend (web) | 200 with `users`/`loads`/`trucks`/`matches` counts at least covering the seeded rows | As expected | ✅ Pass | #17 |
+| T-49 | Every `/admin/*` endpoint refuses a TRANSPORTER's id | backend (web) | 403 on metrics, users, audit-logs and disputes | As expected | ✅ Pass | #17 |
+| T-50 | An unknown `adminId` gets the same 403 as a non-admin (no user-enumeration hint) | backend (web) | 403, indistinguishable from the non-admin case | As expected | ✅ Pass | #17 |
+| T-51 | `GET /admin/users` lists users with role and compliance status | backend (web) | Seeded FREIGHT_OWNER shows `complianceStatus: PENDING`; the admin shows `role: ADMIN` | As expected | ✅ Pass | #17 |
+| T-52 | `GET /admin/audit-logs` returns the audit trail; `GET /admin/disputes` returns a seeded dispute with its OPEN status | backend (web) | Audit listing is a well-formed array; the seeded dispute appears with description and status | As expected | ✅ Pass | #17 |
+| T-53 | **Both parties submit ratings for a completed match and retrieve them** (issue #16 Minimum Integration Test) | backend (web) | POST /matches/{id}/ratings with rater/ratee IDs and score 1-5; GET /matches/{id}/ratings returns all submitted ratings | As expected | ✅ Pass | #16 |
+| T-54 | `GET /users/{userId}/ratings` returns all ratings received by that user | backend (web) | Query user as ratee, fetch ratings where rateeId=userId, verify scores and comments persist | As expected | ✅ Pass | #16 |
+| T-55 | `POST /matches/{id}/disputes` creates a dispute with description, status defaults to OPEN | backend (web) | 201 with full dispute; status, resolutionNote, resolvedBy are null initially | As expected | ✅ Pass | #16 |
+| T-56 | `GET /disputes` returns only OPEN disputes for the admin queue | backend (web) | Filter applies; closed disputes excluded; dispute list queryable by status | As expected | ✅ Pass | #16 |
+| T-57 | `GET /disputes/{id}` fetches a single dispute and returns 404 for unknown ID | backend (web) | Fetch by ID returns full dispute; invalid UUID returns 404 with error message | As expected | ✅ Pass | #16 |
+| T-58 | Creating a dispute writes an `audit_logs` row with action=DISPUTE_RAISED | backend (web) | POST /disputes triggers insert into audit_logs with actorId=raisedBy, action="DISPUTE_RAISED", entityType="dispute" | As expected | ✅ Pass | #16 |
 
 ### Evidence for T-19–T-22
 
@@ -230,7 +235,11 @@ executable lines a test run touched at least once.
 
 | Service | Tool | Line coverage | Gate | Status |
 |---|---|---|---|---|
+<<<<<<< HEAD
 | backend | JaCoCo 0.8.12 | **90.5%** (1000/1105 lines) | 80% | ✅ Pass |
+=======
+| backend | JaCoCo 0.8.12 | **96%** (1919/1992 instructions) | 80% | ✅ Pass |
+>>>>>>> origin/main
 | matching-service | pytest-cov | **100%** (165/165 lines) | 80% | ✅ Pass |
 
 Reports are uploaded as CI artifacts (`coverage-backend`, `coverage-matching-service`)
@@ -264,12 +273,14 @@ coordinator (where the actual logic lives) is already fully covered and the cont
 method is a two-line pass-through. All figures here are taken from the JaCoCo CSV directly,
 not estimated.
 
-It is now **91.2% (936/1026)**, remeasured after merging #10's user/profile work
+It reached 91.2% (936/1026), remeasured after merging #10's user/profile work
 (`UserController`, `CreateUserRequest`, `UpdateUserRequest`, `UserResponse`,
 `PasswordEncoderConfig`, `UserNotFoundException`) and #8's Dockerfiles into #13's branch.
 The percentage moved because the two feature sets landed independently and the bundle
 measured here is neither one alone; `mvn clean verify` was rerun against the merged tree
-rather than assuming the two issues' figures would simply add up.
+rather than assuming the two issues' figures would simply add up. It is now
+**96% (1919/1992 instructions)**, remeasured after merging #11's load postings, #12's trucks
+endpoint, #15's tracking endpoints and #17's admin console into that same tree.
 
 ## Known defects
 
