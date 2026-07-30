@@ -40,6 +40,15 @@
             <artifactId>spring-boot-starter-data-jpa</artifactId>
         </dependency>
 
+        <!-- Enables @Valid / Jakarta Bean Validation annotations (@NotBlank, @Positive,
+             @Pattern) on request DTOs, so malformed input is rejected before it reaches the
+             database. Re-added here rather than assumed present: this branch starts from
+             origin/main before #10's copy of the same dependency has merged. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
