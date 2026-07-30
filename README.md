@@ -15,13 +15,122 @@ Other documents refer to the Java service as *"the orchestrator"* — that is it
 
 ## Quick start
 
-Each service runs independently. Full containerised startup arrives with the Docker Compose work.
+### Full stack (Docker Compose) — the fastest way to a running system
+
+`docker-compose.yml` at the repository root brings up all three pieces, orchestrator,
+matching-service and PostgreSQL, with one command. No local Java, Maven, Python or
+`pip install` needed for this path; only Docker.
+
+```bash
+cp .env.example .env      # once per clone; edit the placeholder values if you want to
+docker compose up --build -d
+```
+
+Confirm both services are actually serving traffic, not just that their containers started:
+
+```bash
+curl http://localhost:8080/health
+# {"service":"backend","status":"UP"}
+
+curl http://localhost:8000/health
+# {"status":"UP","service":"matching-service"}
+```
+
+Interactive API documentation:
+
+- matching-service (FastAPI, generated automatically): <http://localhost:8000/docs>
+- orchestrator (springdoc/Swagger UI): <http://localhost:8080/swagger-ui.html>
+
+`.env` is gitignored and holds real local values; `.env.example` is the only one committed,
+placeholders only, per the brief's "controlled configuration, no secrets committed" line
+(section 4).
+
+### Local database only (Docker), services run natively
+
+Useful for active development on the backend or matching-service, where you want fast
+in-process restarts rather than rebuilding a container on every change. The backend needs a
+PostgreSQL 18 database; the same `docker-compose.yml` above can bring up just that piece.
+The schema #6 defines is applied automatically the first time the container starts, via
+Postgres's own `docker-entrypoint-initdb.d` mechanism (no separate migration step to
+remember).
+
+```bash
+docker compose up -d db
+```
+
+Confirm it came up with the expected tables:
+
+```bash
+docker compose exec -T db psql -U tamp -d tamp -c '\dt'
+```
+
+If port 5432 is already taken by something else on your machine (a common conflict when
+several projects run Postgres locally, and this repo hit exactly that with an unrelated
+`wattwise_postgres` container during development), pick a different host port without
+touching whatever already holds 5432:
+
+```bash
+DB_PORT=55432 docker compose up -d db
+```
+
+**The schema and seed data only apply once, on a genuinely empty volume.** If you change a
+migration file after the first `up`, a plain restart will not re-run it. Remove the volume
+first:
+
+```bash
+docker compose down -v && docker compose up -d db
+```
+
+### Environment switching: one set of values, not two codepaths
+
+The backend reads its database target entirely from environment variables, with the local
+Docker values as their defaults (`backend/src/main/resources/application.yml`):
+
+```bash
+DB_URL=jdbc:postgresql://localhost:5432/tamp
+DB_USERNAME=tamp
+DB_PASSWORD=tamp
+```
+
+Pointing the app at any other PostgreSQL (a different local port, or eventually a real
+deployed database) is one env var change, not a second configuration file:
+
+```bash
+DB_URL=jdbc:postgresql://localhost:55432/tamp mvn -f backend spring-boot:run
+```
+
+There is deliberately no `application-local.yml` / `application-prod.yml` split: the issue
+this setup exists to serve is "without maintaining two codepaths," and a second profile-
+specific file is exactly that.
+
+### Demo accounts
+
+Seeded by `db/seed/dev-seed.sql`, one per role, all sharing one password for a single line
+in this README rather than three:
+
+| Role | Email | Password |
+|---|---|---|
+| Freight Owner | `owner@tamp.example` | `TampDemo2026!` |
+| Transporter | `transporter@tamp.example` | `TampDemo2026!` |
+| Admin | `admin@tamp.example` | `TampDemo2026!` |
+
+The seed data walks a complete demo journey for these three accounts: an already-accepted
+match between the Freight Owner's delivered load and the Transporter's truck, its receipt,
+three tracking events, a rating from each party, one open dispute, and one pending
+compliance document, so the admin console and each role's dashboard have something real to
+show as soon as #10 onward add the screens to show it on. Login itself arrives with #9;
+until then, the password hashes are verifiable directly:
+
+```bash
+docker compose exec -T db psql -U tamp -d tamp -c \
+  "SELECT email, password_hash = crypt('TampDemo2026!', password_hash) AS password_matches FROM users;"
+```
 
 ### Backend (Java)
 
 ```bash
 cd backend
-mvn spring-boot:run          # starts on http://localhost:8080
+mvn spring-boot:run          # starts on http://localhost:8080, connects to the DB above
 mvn clean verify             # run tests + the 80% coverage gate
 ```
 
@@ -40,6 +149,8 @@ Liveness probe:
 curl http://localhost:8080/health
 # {"status":"UP","service":"backend"}
 ```
+
+Interactive API docs are served at <http://localhost:8080/swagger-ui/index.html>.
 
 ### Matching service (Python)
 
@@ -72,28 +183,42 @@ Both services expose `/health` with the same `{"status","service"}` shape, so co
 healthchecks configure one contract rather than two. It is deliberately unauthenticated —
 a probe requiring credentials is useless to the tool that must poll it.
 
-## Cross-service call
+## Matching (FR-05)
 
-The orchestrator reaches matching-service over HTTP. With both services running:
+The orchestrator reaches matching-service over HTTP to generate rule-based matches for a
+load. With both services running and the seeded database up:
 
 ```bash
-curl http://localhost:8080/integration/ping
-# {"service":"matching-service","pong":true}
+curl -X POST http://localhost:8080/loads/00000000-0000-7000-8000-000000000011/matches \
+  -H "Content-Type: application/json" \
+  -d '{"requestedBy": "00000000-0000-7000-8000-000000000001"}'
+```
+```json
+[{"id":"...","truckId":"00000000-0000-7000-8000-000000000021","score":25.0,
+  "reasons":["truck capacity 10000.0kg sufficient for 8000.0kg load",
+             "REFRIGERATED is compatible with REFRIGERATED cargo",
+             "availability windows overlap the pickup window",
+             "truck is already in the origin city (Cape Town)"]}]
 ```
 
-The response says `matching-service`, not `backend` — that is the point: it proves the
-orchestrator really made the hop rather than answering for itself.
+The load and the expected matching truck are both from #7's seed data. The response says
+`matching-service`, not `backend`: that is the point, it proves the orchestrator really
+made the hop rather than answering for itself.
 
-The target is configured by `MATCHING_SERVICE_URL` (default `http://localhost:8000`),
-so Docker Compose in #8 can repoint it at a container hostname without a code change:
+The target is configured by `MATCHING_SERVICE_URL` (default `http://localhost:8000`), so
+Docker Compose (#8) repoints it at the container hostname `matching-service` with no code
+change; see `docker-compose.yml`'s `backend` service.
 
 ```bash
 MATCHING_SERVICE_URL=http://localhost:8010 mvn spring-boot:run
 ```
 
-`/integration/ping` and matching-service's `/ping` are temporary scaffolding for #5 and
-are replaced by the real matching endpoint in #13. See
-[Testing Summary](docs/testing-summary.md) for how to run the end-to-end test.
+No role restriction yet: `requestedBy` stands in for an authenticated caller until #9
+lands. See [Known Limitations](docs/known-limitations.md).
+
+This replaced #5's dummy `/integration/ping` round trip, which existed only to prove the
+network hop worked before there was any real logic behind it. See
+[Testing Summary](docs/testing-summary.md) for how to run the end-to-end and timing tests.
 
 ## Documentation
 

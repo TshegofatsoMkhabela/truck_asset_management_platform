@@ -15,9 +15,9 @@ the row says so rather than carrying a placeholder.
 | T-02 | `GET /health` returns 200 with `status: UP` and `service: matching-service` | matching-service | 200, `{"status":"UP","service":"matching-service"}` | As expected | ✅ Pass | #2 |
 | T-03 | `GET /` returns the service greeting (context loads and routes) | backend | 200, `service: backend`, `status: ok` | As expected | ✅ Pass | #1 |
 | T-04 | `GET /` returns the service greeting (ASGI app assembles and routes) | matching-service | 200, `service: matching-service`, `status: ok` | As expected | ✅ Pass | #1 |
-| T-05 | `GET /ping` returns the fixed cross-service target payload | matching-service | 200, `{"service":"matching-service","pong":true}` | As expected | ✅ Pass | #5 |
-| T-06 | The client calls `GET {base}/ping` with the right verb and parses the response | backend | Request matches; body deserialises to `PingResponse` | As expected | ✅ Pass | #5 |
-| T-07 | **Orchestrator reaches matching-service over a real network call** | both (e2e) | 200, body `service` is `matching-service`, `pong` true | As expected | ✅ Pass | #5 |
+| T-05 | ~~`GET /ping` returns the fixed cross-service target payload~~ | matching-service | n/a | Removed (#13): `/ping` and its caller (`IntegrationController`) existed only as a target for T-07's dummy round trip, superseded by real matching (see T-36) | ➖ Superseded | #5 |
+| T-06 | ~~The client calls `GET {base}/ping` with the right verb and parses the response~~ | backend | n/a | Removed (#13): `MatchingServiceClient.ping()` was replaced by `requestMatches(...)`, see T-25 | ➖ Superseded | #5 |
+| T-07 | ~~Orchestrator reaches matching-service over a real network call~~ | both (e2e) | n/a | Removed (#13): superseded by T-36, the real matching round trip against #7's seeded data | ➖ Superseded | #5 |
 | T-08 | All 11 migrations apply in order to an empty PostgreSQL 18 database | backend (db) | Every table created, no error | As expected | ✅ Pass | #6 |
 | T-09 | `users` constraints: case-insensitive unique email, role and compliance CHECKs, blank name, time-ordered UUID keys (6 tests) | backend (db) | Each invalid write rejected by its named constraint | As expected | ✅ Pass | #6 |
 | T-10 | **A user, a load and a truck persist with intact foreign keys** (issue #6 Minimum Integration Test) | backend (db) | Rows stored, `owner_id` and `transporter_id` read back correctly | As expected | ✅ Pass | #6 |
@@ -29,15 +29,164 @@ the row says so rather than carrying a placeholder.
 | T-16 | `updated_at` advances on modification and equals `created_at` on insert (3 tests) | backend (db) | `updated_at > created_at` after an UPDATE | As expected | ✅ Pass | #6 |
 | T-17 | `spring.jpa.hibernate.ddl-auto: validate` rejects a deliberately mismatched entity | backend (persistence) | Application context fails to start | As expected | ✅ Pass | #6 |
 | T-18 | Every one of the 10 JPA entities round-trips through its repository: generated id, `JSONB` (`matches.reasons`, `audit_logs.details`), `CITEXT` (case-insensitive `findByEmail`), `INET` (`receipts.ip_address`), and each derived query method (12 tests) | backend (persistence) | Save then read-back matches; derived queries return only the matching rows | As expected | ✅ Pass | #6 |
-| T-19 | `GlobalExceptionHandler` maps a validation failure, an authentication failure and an access-denial to the documented `ApiError` shape with the correct status (3 tests) | backend | 400/401/403 with `status`, `error`, `message`, `fieldErrors` populated as appropriate | As expected | ✅ Pass | #9 |
-| T-20 | `AuditService.record` writes an `AuditLog` with the actor, action, entity type/id and details it was given | backend | Saved entity's fields match the call arguments exactly | As expected | ✅ Pass | #9 |
-| T-21 | `POST /auth/register` hashes the password (never stores or returns it) and writes a `REGISTERED` audit event; a blank field returns the documented validation shape (3 tests) | backend | Stored hash starts with `$2` (BCrypt) and differs from the raw password; exactly one audit row; 400 with `fieldErrors.fullName` on a blank name | As expected | ✅ Pass | #9 |
-| T-22 | `JwtService` issues a token that parses back to the same user id and role, and rejects a token signed with a different key (2 tests) | backend | Round-trip matches; cross-key token throws `SignatureException` | As expected | ✅ Pass | #9 |
-| T-23 | `POST /auth/login` returns a token and the user for valid credentials, returns the documented 401 shape for a wrong password, and writes a `LOGGED_IN` audit event (3 tests) | backend | 200 with `token`/`user`; 401 `UNAUTHENTICATED` for a wrong password; one `LOGGED_IN` row after login | As expected | ✅ Pass | #9 |
-| T-24 | `JwtAuthenticationFilter` authenticates a request carrying a valid bearer token and leaves the security context empty for a missing or malformed header (3 tests) | backend | Context holds the token's user id and `ROLE_<role>` only when the header is a genuinely valid bearer token | As expected | ✅ Pass | #9 |
-| T-25 | The filter chain keeps `/health`, `/`, `/auth/register` and `/auth/login` public while rejecting an unauthenticated request to any other path with 401 (4 tests) | backend | Public routes 200/400; unlisted route 401 with the documented shape | As expected | ✅ Pass | #9 |
-| T-26 | **`GET /audit` allows an Admin token, rejects a non-Admin token with 403, and rejects a missing token with 401** (issue #9 Minimum Integration Test, 3 tests) | backend | 200 for Admin; 403 `ACCESS_DENIED` for a Transporter; 401 `UNAUTHENTICATED` for no token | As expected | ✅ Pass | #9 |
-| T-27 | The generated OpenAPI description lists `/auth/register`, `/auth/login` and `/audit` and declares the `bearerAuth` scheme; Swagger UI's page loads, both without a token (2 tests) | backend | 200 for `/v3/api-docs` and `/swagger-ui/index.html`; `components.securitySchemes.bearerAuth.scheme` is `bearer` | As expected | ✅ Pass | #9 |
+| T-19 | `docker compose up` on an empty volume creates all 10 schema tables via `docker-entrypoint-initdb.d` | db (docker) | `\dt` lists all 10 tables | As expected | ✅ Pass | #7 |
+| T-20 | The seed script populates all 9 seedable tables with a complete demo journey (one accepted match, receipt, 3 tracking events, 2 ratings, 1 dispute, 1 compliance document) | db (docker) | Row counts: users 3, loads 2, trucks 2, matches 1, receipts 1, tracking_events 3, ratings 2, disputes 1, compliance_documents 1 | As expected | ✅ Pass | #7 |
+| T-21 | Seeded password hashes are genuine, verifiable bcrypt (`pgcrypto`'s `crypt()`/`gen_salt('bf')`), not placeholders | db (docker) | `password_hash = crypt('TampDemo2026!', password_hash)` is `true` for all 3 demo accounts | As expected | ✅ Pass | #7 |
+| T-22 | **The application starts against the dockerized local DB using only the `DB_URL`/`DB_USERNAME`/`DB_PASSWORD` config flags, and a basic read/write against it succeeds** (issue #7 Minimum Integration Test) | backend + db (docker) | App boots, Hibernate schema validation passes, `/health` returns 200; a direct `INSERT`/`SELECT`/`DELETE` against the same live database succeeds while the app remains connected | As expected | ✅ Pass | #7 |
+| T-23 | **Clean clone → `docker compose up --build -d` → `/health` on both backend and matching-service return 200** (issue #8 Minimum Integration Test) | backend + matching-service + db (docker) | All 3 containers `Up` (db `Healthy`); `curl :8080/health` and `curl :8000/health` both 200 | As expected, after one fix (see below) | ✅ Pass | #8 |
+| T-24 | matching-service's generated API docs page loads after `docker compose up` | matching-service (docker) | `curl :8000/docs` → 200 | As expected | ✅ Pass | #8 |
+| T-25 | orchestrator's Swagger UI loads after `docker compose up` | backend (docker) | 200 | 200, confirmed once #10's and #13's independent `springdoc-openapi` additions were merged into one dependency | ✅ Pass | #8 |
+| T-26 | `PasswordEncoder` hashes rather than passing input through unchanged, and salts each call differently (2 tests) | backend | Encoded value never equals raw input; two encodings of the same input differ | As expected | ✅ Pass | #10 |
+| T-27 | `CreateUserRequest` bean validation rejects a blank name and a malformed email, and accepts a well-formed request (3 tests) | backend | Violations reported on the right field; a valid request produces none | As expected | ✅ Pass | #10 |
+| T-28 | **A user is created via `POST /users`, then fetched via `GET /users/{id}` and the data matches** (issue #10 Minimum Integration Test) | backend | 201 with `complianceStatus: PENDING`; subsequent GET returns the same `fullName`/`email`; stored `password_hash` is never the raw password | As expected | ✅ Pass | #10 |
+| T-29 | `GET /users/{id}` for an id with no matching row | backend | 404, not an unhandled 500 | As expected | ✅ Pass | #10 |
+| T-30 | `PATCH /users/{id}` with only `complianceStatus` set leaves `fullName` unchanged | backend | 200, `complianceStatus` updated, `fullName` untouched | As expected | ✅ Pass | #10 |
+| T-31 | `POST /users` with an email differing only in case from an existing user | backend | 409, not the raw `DataIntegrityViolationException` | As expected | ✅ Pass | #10 |
+| T-32 | Rule engine rejects each disqualifying condition independently: capacity, cargo/vehicle incompatibility, non-overlapping availability, different city (4 tests), accepts and explains a valid match, and ranks by capacity headroom | matching-service | Each disqualified case returns no match; the valid case returns all 4 reasons; two eligible trucks are ordered by headroom, not tied | As expected | ✅ Pass | #13 |
+| T-33 | `POST /match` correctly serialises the rule engine's decision to and from HTTP, including the empty-result case | matching-service | 200 with the eligible truck and its reasons; 200 with an empty list when nothing qualifies | As expected | ✅ Pass | #13 |
+| T-34 | `MatchingServiceClient.requestMatches(...)` sends snake_case field names matching-service expects and parses the response | backend | Request body contains `origin_city`, `weight_kg`, `vehicle_type`; response parses to `truckId`, `score`, `reasons` | As expected | ✅ Pass | #13 |
+| T-35 | `MatchingCoordinator` fetches the load and available trucks, persists every eligible match, and writes an audit event naming the actor, the load, and the match count, including when zero trucks are eligible | backend | 1 match persisted and 1 audit event with `matchCount: 1`; on the zero-match path, 0 matches persisted and 1 audit event with `matchCount: 0` | As expected | ✅ Pass | #13 |
+| T-36 | **Real HTTP call from the orchestrator to matching-service returns the correct match within 2 seconds on #7's seeded data** (replaces T-05–T-07's dummy round trip; issue #13's required performance evidence) | both (e2e) | The seeded open load matches exactly the one eligible seeded truck, with real reasons, in under 2000ms | 706ms, eligible truck found | ✅ Pass | #13 |
+| T-37 | `GlobalExceptionHandler` maps a validation failure, an authentication failure and an access-denial to the documented `ApiError` shape with the correct status (3 tests) | backend | 400/401/403 with `status`, `error`, `message`, `fieldErrors` populated as appropriate | As expected | ✅ Pass | #9 |
+| T-38 | `AuditService.record` writes an `AuditLog` with the actor, action, entity type/id and details it was given | backend | Saved entity's fields match the call arguments exactly | As expected | ✅ Pass | #9 |
+| T-39 | `POST /auth/register` hashes the password (never stores or returns it), writes a `REGISTERED` audit event, rejects a blank field with the documented validation shape, and rejects a duplicate email with 409 (4 tests) | backend | Stored hash starts with `$2` (BCrypt) and differs from the raw password; exactly one audit row; 400 with `fieldErrors.fullName` on a blank name; 409 `EMAIL_ALREADY_REGISTERED` on a repeat email | As expected | ✅ Pass | #9 |
+| T-40 | `JwtService` issues a token that parses back to the same user id and role via both the individual accessors and the combined `parseToken`, and rejects a token signed with a different key (3 tests) | backend | Round-trip matches; cross-key token throws `SignatureException` | As expected | ✅ Pass | #9 |
+| T-41 | `POST /auth/login` returns a token and the user for valid credentials, returns the documented 401 shape for a wrong password and for an unknown email with the same body, and writes a `LOGGED_IN` audit event (4 tests) | backend | 200 with `token`/`user`; 401 `UNAUTHENTICATED` for a wrong password and for an unknown email, both with identical body; one `LOGGED_IN` row after login | As expected | ✅ Pass | #9 |
+| T-42 | `JwtAuthenticationFilter` authenticates a request carrying a valid bearer token, leaves the security context empty for a missing, malformed, or JWT-rejected header, and propagates (rather than swallows) an unrelated `RuntimeException` from `JwtService` (5 tests) | backend | Context holds the token's user id and `ROLE_<role>` only for a genuinely valid bearer token; a non-JWT exception is not caught | As expected | ✅ Pass | #9 |
+| T-43 | The filter chain keeps `/health`, `/`, `/auth/register` and `/auth/login` public while rejecting an unauthenticated request to any other path with 401 (4 tests) | backend | Public routes 200/400; unlisted route 401 with the documented shape | As expected | ✅ Pass | #9 |
+| T-44 | **`GET /audit` allows an Admin token, rejects a non-Admin token with 403, and rejects a missing token with 401** (issue #9 Minimum Integration Test, 3 tests) | backend | 200 for Admin; 403 `ACCESS_DENIED` for a Transporter; 401 `UNAUTHENTICATED` for no token | As expected | ✅ Pass | #9 |
+| T-45 | The generated OpenAPI description lists `/auth/register`, `/auth/login` and `/audit` and declares the `bearerAuth` scheme; Swagger UI's page loads, both without a token (2 tests) | backend | 200 for `/v3/api-docs` and `/swagger-ui/index.html`; `components.securitySchemes.bearerAuth.scheme` is `bearer` | As expected | ✅ Pass | #9 |
+
+### Evidence for T-19–T-22
+
+```
+$ docker compose exec -T db psql -U tamp -d tamp -c '\dt'
+ public | audit_logs           | table | tamp
+ public | compliance_documents | table | tamp
+ public | disputes             | table | tamp
+ public | loads                | table | tamp
+ public | matches              | table | tamp
+ public | ratings              | table | tamp
+ public | receipts             | table | tamp
+ public | tracking_events      | table | tamp
+ public | trucks               | table | tamp
+ public | users                | table | tamp
+(10 rows)
+```
+
+```
+$ docker compose exec -T db psql -U tamp -d tamp -c "SELECT ... row counts ..."
+users 3 | loads 2 | trucks 2 | matches 1 | receipts 1
+tracking_events 3 | ratings 2 | disputes 1 | compliance_documents 1
+```
+
+```
+$ docker compose exec -T db psql -U tamp -d tamp -c \
+  "SELECT email, password_hash = crypt('TampDemo2026!', password_hash) FROM users;"
+ admin@tamp.example       | t
+ owner@tamp.example       | t
+ transporter@tamp.example | t
+```
+
+```
+$ DB_URL=jdbc:postgresql://localhost:55432/tamp DB_USERNAME=tamp DB_PASSWORD=tamp mvn spring-boot:run
+...HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@...
+...Database version: 18.4
+...Started BackendApplication in 16.93 seconds
+$ curl http://localhost:8080/health
+{"status":"UP","service":"backend"}
+```
+
+```
+$ docker compose exec -T db psql -U tamp -d tamp -c "
+INSERT INTO users (full_name, email, password_hash, role) VALUES ('MIT Check', 'mit-check@tamp.example', 'x', 'ADMIN');
+SELECT full_name, email FROM users WHERE email = 'mit-check@tamp.example';
+DELETE FROM users WHERE email = 'mit-check@tamp.example';
+"
+INSERT 0 1
+ MIT Check | mit-check@tamp.example
+DELETE 1
+```
+
+T-22's read/write is demonstrated directly against the database, not through an HTTP
+endpoint: no route in the application touches persistence yet (that begins at #10). The
+app boot and the direct database check were run concurrently against the *same* live
+container, which is what proves the config-flag connection and the read/write both hold
+at once, rather than proving two unrelated things.
+
+### Evidence for T-23–T-24
+
+Run from a genuinely clean state, existing images removed first, to prove the documented
+commands work from a fresh clone rather than only against an already-built cache:
+
+```
+$ docker rmi truck-matching-backend truck-matching-matching-service truck-matching-db
+$ cp .env.example .env
+$ docker compose up --build -d
+ Container truck-matching-db-1 Healthy
+ Container truck-matching-backend-1 Started
+ Container truck-matching-matching-service-1 Started
+
+$ curl http://localhost:8080/health
+{"status":"UP","service":"backend"} [HTTP 200]
+
+$ curl http://localhost:8000/health
+{"status":"UP","service":"matching-service"} [HTTP 200]
+
+$ curl -o /dev/null -w "%{http_code}\n" http://localhost:8000/docs
+200
+```
+
+One real defect was caught and fixed by this run, not by inspection: the first attempt
+had `matching-service` build successfully but crash on start with `Could not import
+module "matching_service.main"`. A plain (non-editable) `pip install .` copies whatever
+is in `src/` into site-packages at that point in the build, and at that point only an
+empty stub package existed (written to satisfy the build backend's package discovery
+before the real source is copied in a later layer). The later `COPY src ./src` updated
+the build context but not the already-installed copy. Fixed by switching to
+`pip install -e .` (editable install), which references `./src` instead of copying it,
+so the later `COPY` is what Python actually imports. See `matching-service/Dockerfile`.
+
+A second pass (`/simplify`) changed both services' port bindings from all-interfaces
+(`"8080:8080"`) to loopback-only (`"127.0.0.1:8080:8080"`), matching `db`'s own existing
+convention. T-23 was re-run after that change to confirm it didn't silently break the
+smoke test:
+
+```
+$ docker compose up -d
+$ curl http://localhost:8080/health
+{"status":"UP","service":"backend"} [HTTP 200]
+$ curl http://localhost:8000/health
+{"status":"UP","service":"matching-service"} [HTTP 200]
+```
+
+The first retry returned `HTTP 000` (connection refused) after only a 2-second wait —
+not a regression from the binding change, Spring Boot's own startup time, confirmed by
+retrying after 15 seconds and getting 200. Loopback and all-interfaces bindings both
+resolve `localhost` identically from the same machine; only reachability from other
+machines on the network differs, which nothing here tests or needs.
+
+### A near-miss caught before commit, not after
+
+An earlier version of `docker-compose.yml` bind-mounted `db/migrations` directly as
+`/docker-entrypoint-initdb.d` (read-write, since Docker cannot create a second bind
+mount's mountpoint inside a directory mounted read-only). It worked: T-19 through T-22
+above all passed against it, but `git status` before committing showed an untracked
+0-byte file, `db/migrations/Z01__dev_seed.sql`, sitting in the actual git-tracked source
+folder. Because the read-write bind mount is a live passthrough to the host directory,
+not a copy, creating the second mount's mountpoint stub inside it wrote that stub
+directly onto the host filesystem, and it survived `docker compose down`.
+
+Every green test run above was run *before* this was noticed. The tests proved the schema
+and seed data landed correctly; they said nothing about a side effect on the host outside
+the container. Fixed by moving to `db/Dockerfile`, which `COPY`s both directories into the
+image at build time, with no bind mount into `db/` so nothing to leak. Re-verified against the
+rebuilt image: same 10 tables, same row counts, `git status` clean afterward.
+
+The transferable point: a passing integration test proves the thing it was written to
+check, not the absence of every side effect. Checking `git status` after running
+infrastructure changes is cheap and would have caught this regardless of which specific
+mechanism caused it.
 
 T-08 to T-18 run against a real PostgreSQL 18 container started by **Testcontainers**, a
 library that starts and disposes of Docker containers around a test run, rather than an
@@ -73,8 +222,8 @@ executable lines a test run touched at least once.
 
 | Service | Tool | Line coverage | Gate | Status |
 |---|---|---|---|---|
-| backend | JaCoCo 0.8.12 | **93.1%** (326/350 lines) | 80% | ✅ Pass |
-| matching-service | pytest-cov | **100%** (8/8 lines) | 80% | ✅ Pass |
+| backend | JaCoCo 0.8.12 | **94%** (1617/1717 instructions) | 80% | ✅ Pass |
+| matching-service | pytest-cov | **100%** (165/165 lines) | 80% | ✅ Pass |
 
 Reports are uploaded as CI artifacts (`coverage-backend`, `coverage-matching-service`)
 on every run, including failures — the number matters most when the gate trips.
@@ -91,18 +240,14 @@ so any real logic added elsewhere is still measured.
 Nothing is excluded on the Python side.
 
 The backend figure was recorded as 100% (4/4 lines) when #2 landed, then 95% (19/20) once
-#6's schema tests were measured against the merged state of #2/#4/#5 (the drop was
-`IntegrationController`'s `/integration/ping` handler, reachable only through the e2e-tagged
-T-07). It reached 93.5% (200/214) once #6 grew to include the JPA persistence layer. It is
-now **93.1% (326/350)**, remeasured after #9 added the auth, RBAC and OpenAPI documentation
-code: registration, login, the JWT filter, and the two Security-layer error handlers. 24 lines
-remain uncovered per `target/site/jacoco/jacoco.csv`: the same pre-existing entity-accessor
-residue in `Dispute`, `ComplianceDocument`, `Truck`, `Match`, `Load` and `InetAddressConverter`,
-plus `IntegrationController`'s e2e-only line, and a small number of unexercised branches in
-`RestAccessDeniedHandler` and `JwtAuthenticationFilter` (defensive catch/write paths that only
-the request shapes covered by T-19 through T-27 currently reach). Each of these is a path no
-test happens to exercise, not a gap in what the acceptance criteria require. All figures here
-are taken from the JaCoCo CSV directly, not estimated.
+#6's schema tests were measured against the merged state of #2/#4/#5, then 93.5% (200/214)
+once #6 grew to include the JPA persistence layer. It reached 92.6% (249/269) once #13 added
+the matching coordinator, controller and DTOs and removed `IntegrationController`, then
+91.2% (936/1026) once #10's user/profile work and #8's Dockerfiles landed in the same tree.
+It is now **94% (1617/1717 instructions)**, remeasured after merging #9's auth, RBAC, audit
+trail and OpenAPI documentation code (registration, login, the JWT filter, and the two
+Security-layer error handlers) into that same tree. All figures here are taken from the
+JaCoCo CSV directly, not estimated.
 
 ## Known defects
 
@@ -124,6 +269,19 @@ supported on this repository. Please ensure Dependency graph is enabled." This w
 repository setting, not a code defect: Dependabot alerts (`vulnerability-alerts`) were
 disabled, which the dependency-review feature depends on. Enabled via
 `gh api -X PUT repos/.../vulnerability-alerts`; the job passed on rerun with no code change.
+
+### Found during #13: a real network call the mock test could not catch
+
+`MatchingTimingE2ETest`'s first run against a genuinely running matching-service failed
+with FastAPI reporting the entire request body missing, even though Spring's own trace
+logging confirmed a correct body had been built and handed to the HTTP layer. Root cause:
+`MatchingServiceConfig` used the JDK's default `java.net.http.HttpClient`, which sends
+`Expect: 100-continue` for POST requests with a body; uvicorn does not answer that
+negotiation, so the client gave up waiting and the body never reached the server.
+`MatchingServiceClientTest`'s `MockRestServiceServer`-based test passed throughout this,
+because a mock server has no transport layer to disagree with the client about. Fixed by
+switching to `SimpleClientHttpRequestFactory`. This is the reason #13's plan insisted on a
+real network call for the timing test rather than a mock: the bug was only visible there.
 
 ## How to reproduce
 
@@ -148,12 +306,13 @@ pytest
 
 The 80% threshold lives in `pyproject.toml`, so a local run gates exactly as CI does.
 
-### The cross-service end-to-end test (T-07)
+### The cross-service end-to-end test (T-36)
 
-T-07 needs **both** services running, so it is tagged `e2e` and excluded from the
-default Maven run. Without that exclusion the `backend (Java)` CI job would depend on
-a live Python process, destroying the per-service independence that #2 exists to
-provide — a backend failure would no longer tell you which service actually broke.
+T-36 needs **both** services running, plus a Docker daemon for its own Testcontainers
+Postgres, so it is tagged `e2e` and excluded from the default Maven run. Without that
+exclusion the `backend (Java)` CI job would depend on a live Python process, destroying
+the per-service independence that #2 exists to provide: a backend failure would no
+longer tell you which service actually broke.
 
 ```bash
 # terminal 1
@@ -163,7 +322,8 @@ cd matching-service && uvicorn matching_service.main:app --port 8000
 cd backend && mvn verify -Pe2e
 ```
 
-Expected: `Tests run: 1, Failures: 0` / `BUILD SUCCESS`.
+Expected: `Tests run: 1, Failures: 0` / `BUILD SUCCESS`, with `Matching round trip took
+NNNms` printed (706ms when last measured).
 
 If port 8000 is already in use — likely when several people or agents work on this
 machine at once — start the service on another port and point the orchestrator at it:

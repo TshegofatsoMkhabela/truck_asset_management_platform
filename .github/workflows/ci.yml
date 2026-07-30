@@ -140,11 +140,14 @@ jobs:
       # sleep is either too short (flaky) or too long (slow), and neither tells you
       # what happened. Failing here with the log printed distinguishes "the service
       # never came up" from "the round trip is broken" — two very different bugs.
+      #
+      # Polls /health, not /ping: #13 removed /ping along with the #5 dummy round
+      # trip it existed for, once the real /match endpoint replaced it.
       - name: Wait for matching-service to be ready
         working-directory: matching-service
         run: |
           for i in $(seq 1 30); do
-            if curl -sf http://localhost:8000/ping > /dev/null; then
+            if curl -sf http://localhost:8000/health > /dev/null; then
               echo "matching-service ready after ${i}s"
               exit 0
             fi
@@ -156,6 +159,8 @@ jobs:
 
       # -Pe2e runs ONLY the e2e-tagged tests and skips the coverage gate, which
       # measures the unit suite in the backend job rather than this single round trip.
+      # As of #13, this runs MatchingTimingE2ETest: the real rule-based matching call
+      # against #7's seeded data, replacing #5's dummy ping round trip.
       - name: Run cross-service end-to-end test
         working-directory: backend
         env:

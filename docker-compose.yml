@@ -1,0 +1,80 @@
+services:
+  # Disposable local Postgres matching the schema from #6. db/Dockerfile bakes
+  # db/migrations and db/seed into Postgres's own docker-entrypoint-initdb.d at build
+  # time; see that file for why build-time COPY replaced an earlier bind-mount approach.
+  # On the container's FIRST start against an empty volume, Postgres runs every file it
+  # finds directly inside that directory, in filename order: the zero-padded migration
+  # names (V01__..V11__, ADR-2) plus the seed file's Z01__ prefix guarantee it always
+  # runs last.
+  #
+  # This mechanism only runs once per volume. If the schema changes later, `docker compose
+  # down -v` (removing the volume) is required before the new migrations take effect on a
+  # plain `up`, a restart alone will not re-run anything in initdb.d, and neither will
+  # rebuilding the image, since the volume (not the image) is what already has data in it.
+  db:
+    build:
+      context: ./db
+    environment:
+      # DB_NAME is not read from the same place the app's DB_URL is (that path is a
+      # literal "tamp" in application.yml's default). Overriding DB_NAME alone here
+      # points this container at a differently-named database while the app keeps
+      # trying to connect to "tamp": change both together, or leave both at their
+      # shared default.
+      POSTGRES_DB: ${DB_NAME:-tamp}
+      POSTGRES_USER: ${DB_USERNAME:-tamp}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-tamp}
+    # Bound to loopback only, not 0.0.0.0: this is a local dev database with a well-known
+    # default password, and nothing requires it reachable from outside this machine.
+    # Omitting "127.0.0.1:" here would expose it to anyone else on the same network.
+    ports:
+      - "127.0.0.1:${DB_PORT:-5432}:5432"
+    volumes:
+      # Postgres 18's official image expects a single mount at the /var/lib/postgresql
+      # PARENT, not .../data: it now manages a version-specific subdirectory itself, to
+      # support pg_upgrade. Mounting at .../data (the pre-18 convention) starts the
+      # container but the image then refuses to see its own data as valid. Discovered by
+      # running this, not documented anywhere obvious in the image's own quick-start.
+      #
+      # Only the data directory is a volume now: the init scripts are baked into the
+      # image (see db/Dockerfile), not bind-mounted, so there is nothing here that touches
+      # the host filesystem outside this one named volume.
+      - db-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-tamp} -d ${DB_NAME:-tamp}"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+  backend:
+    build:
+      context: ./backend
+    environment:
+      # "db", the Compose service name above, not localhost: from inside this
+      # container, the database is reached by its name on the Compose network.
+      DB_URL: jdbc:postgresql://db:5432/${DB_NAME:-tamp}
+      DB_USERNAME: ${DB_USERNAME:-tamp}
+      DB_PASSWORD: ${DB_PASSWORD:-tamp}
+      MATCHING_SERVICE_URL: http://matching-service:8000
+      JWT_SECRET: ${JWT_SECRET}
+    # Loopback only, matching the `db` service's own reasoning above: before #9 lands
+    # every endpoint here is unauthenticated, so nothing on the local network should
+    # be able to reach it either. A browser on this machine still reaches it fine at
+    # http://localhost:8080, loopback and localhost are the same address.
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      db:
+        # Waits for Postgres to actually accept connections, not just for its
+        # container process to start: ddl-auto:validate fails startup outright if
+        # the backend reaches Postgres before db-data has been initialised.
+        condition: service_healthy
+
+  matching-service:
+    build:
+      context: ./matching-service
+    # Loopback only; same reasoning as `backend` above.
+    ports:
+      - "127.0.0.1:8000:8000"
+
+volumes:
+  db-data:
