@@ -14,7 +14,7 @@ Maps each functional requirement to the code that implements it. Every row start
 | FR-06 | Users can accept or reject a match and the decision is logged | Must | — | — | Not implemented |
 | FR-07 | Accepted match produces a digital confirmation receipt | Must | — | — | Not implemented |
 | FR-08 | Trip tracking simulated using mock coordinates or status progression | Must | — | — | Not implemented |
-| FR-09 | Parties can rate/review one another after completion | Should | — | — | Not implemented |
+| FR-09 | Parties can rate/review one another after completion | Should | POST/GET /matches/{id}/ratings, GET /users/{id}/ratings (`RatingController`, #16) | `RatingControllerTest.submitsRatingForCompletedMatch`, `listRatingsForMatch` | Complete |
 | FR-10 | Admin can manage users, compliance status and flagged/disputed items | Must | — | — | Not implemented |
 | FR-11 | Admin can view basic platform metrics | Must | — | — | Not implemented |
 | FR-12 | Key actions are available in an audit trail | Must | — | — | Not implemented |

@@ -53,6 +53,12 @@ the row says so rather than carrying a placeholder.
 | T-40 | `GET /loads/{id}` with unknown ID returns 404 | backend (web) | Random UUID in path returns 404 with error message | As expected | ✅ Pass | #11 |
 | T-41 | Creating a load writes an `audit_logs` row with action=LOAD_POSTED | backend (web) | POST /loads triggers insert into audit_logs with actorId=ownerId, action="LOAD_POSTED", entityType="load" | As expected | ✅ Pass | #11 |
 | T-42 | `POST /loads` rejects invalid cargo type, non-positive weight/volume, blank cities | backend (web) | DTO validation (Jakarta Bean Validation) rejects GENERAL+INVALID, weightKg=0, blank originCity (HTTP 400) | As expected | ✅ Pass | #11 |
+| T-43 | **Both parties submit ratings for a completed match and retrieve them** (issue #16 Minimum Integration Test) | backend (web) | POST /matches/{id}/ratings with rater/ratee IDs and score 1-5; GET /matches/{id}/ratings returns all submitted ratings | As expected | ✅ Pass | #16 |
+| T-44 | `GET /users/{userId}/ratings` returns all ratings received by that user | backend (web) | Query user as ratee, fetch ratings where rateeId=userId, verify scores and comments persist | As expected | ✅ Pass | #16 |
+| T-45 | `POST /matches/{id}/disputes` creates a dispute with description, status defaults to OPEN | backend (web) | 201 with full dispute; status, resolutionNote, resolvedBy are null initially | As expected | ✅ Pass | #16 |
+| T-46 | `GET /disputes` returns only OPEN disputes for the admin queue | backend (web) | Filter applies; closed disputes excluded; dispute list queryable by status | As expected | ✅ Pass | #16 |
+| T-47 | `GET /disputes/{id}` fetches a single dispute and returns 404 for unknown ID | backend (web) | Fetch by ID returns full dispute; invalid UUID returns 404 with error message | As expected | ✅ Pass | #16 |
+| T-48 | Creating a dispute writes an `audit_logs` row with action=DISPUTE_RAISED | backend (web) | POST /disputes triggers insert into audit_logs with actorId=raisedBy, action="DISPUTE_RAISED", entityType="dispute" | As expected | ✅ Pass | #16 |
 
 ### Evidence for T-19–T-22
 
@@ -219,7 +225,7 @@ executable lines a test run touched at least once.
 
 | Service | Tool | Line coverage | Gate | Status |
 |---|---|---|---|---|
-| backend | JaCoCo 0.8.12 | **91.1%** (936/1026 lines) | 80% | ✅ Pass |
+| backend | JaCoCo 0.8.12 | **90.5%** (1000/1105 lines) | 80% | ✅ Pass |
 | matching-service | pytest-cov | **100%** (165/165 lines) | 80% | ✅ Pass |
 
 Reports are uploaded as CI artifacts (`coverage-backend`, `coverage-matching-service`)
