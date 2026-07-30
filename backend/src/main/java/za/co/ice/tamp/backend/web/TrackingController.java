@@ -8,6 +8,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import jakarta.persistence.EntityManager;
 import jakarta.validation.Valid;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.HttpStatus;
@@ -42,6 +43,14 @@ import za.co.ice.tamp.backend.web.dto.TrackingEventResponse;
 @RestController
 public class TrackingController {
 
+    /**
+     * The only direction a trip can move. A status not in this list (there is none, since
+     * {@link za.co.ice.tamp.backend.web.dto.CreateTrackingEventRequest} restricts input to
+     * these four) or a position-only event skips the regression check entirely.
+     */
+    private static final List<String> STAGE_ORDER =
+            List.of("DISPATCHED", "IN_TRANSIT", "ARRIVED", "DELIVERED");
+
     private final MatchRepository matchRepository;
     private final TrackingEventRepository trackingEventRepository;
     private final EntityManager entityManager;
@@ -66,13 +75,16 @@ public class TrackingController {
                 content = @Content(schema = @Schema(implementation = TrackingEventResponse.class))),
         @ApiResponse(responseCode = "400", description = "Neither a status nor a coordinate pair supplied, or values out of range"),
         @ApiResponse(responseCode = "404", description = "Match not found"),
-        @ApiResponse(responseCode = "409", description = "Match exists but is not ACCEPTED")
+        @ApiResponse(responseCode = "409", description = "Match exists but is not ACCEPTED, or the status moves the trip backwards")
     })
     public ResponseEntity<TrackingEventResponse> record(@PathVariable UUID matchId,
             @Valid @RequestBody CreateTrackingEventRequest request) {
         Match match = findOrThrow(matchId);
         if (!"ACCEPTED".equals(match.getStatus())) {
             throw new MatchNotAcceptedException(matchId, match.getStatus());
+        }
+        if (request.status() != null) {
+            rejectIfStageRegresses(matchId, request.status());
         }
 
         TrackingEvent saved = trackingEventRepository.save(new TrackingEvent(
@@ -101,6 +113,18 @@ public class TrackingController {
         findOrThrow(matchId);
         return trackingEventRepository.findByMatchIdOrderByOccurredAtAsc(matchId).stream()
                 .map(TrackingEventResponse::from).toList();
+    }
+
+    private void rejectIfStageRegresses(UUID matchId, String attemptedStatus) {
+        Optional<TrackingEvent> current =
+                trackingEventRepository.findFirstByMatchIdAndStatusIsNotNullOrderByOccurredAtDesc(matchId);
+        if (current.isEmpty()) {
+            return;
+        }
+        String currentStatus = current.get().getStatus();
+        if (STAGE_ORDER.indexOf(attemptedStatus) < STAGE_ORDER.indexOf(currentStatus)) {
+            throw new TrackingStageRegressionException(matchId, currentStatus, attemptedStatus);
+        }
     }
 
     private Match findOrThrow(UUID matchId) {
@@ -136,6 +160,11 @@ public class TrackingController {
 
     @ExceptionHandler(MatchNotAcceptedException.class)
     public ResponseEntity<String> handleNotAccepted(MatchNotAcceptedException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ex.getMessage());
+    }
+
+    @ExceptionHandler(TrackingStageRegressionException.class)
+    public ResponseEntity<String> handleStageRegression(TrackingStageRegressionException ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(ex.getMessage());
     }
 }

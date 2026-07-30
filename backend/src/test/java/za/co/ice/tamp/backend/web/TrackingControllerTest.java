@@ -111,6 +111,23 @@ class TrackingControllerTest extends JpaTestBase {
     }
 
     @Test
+    void rejectsAStatusThatMovesBackwardsInTheTripLifecycle() throws Exception {
+        // DISPATCHED -> IN_TRANSIT -> ARRIVED -> DELIVERED is the only allowed direction;
+        // a trip cannot un-deliver itself.
+        UUID matchId = seedMatch("ACCEPTED");
+
+        mockMvc.perform(post("/matches/" + matchId + "/tracking")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(eventBody("DELIVERED")))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(post("/matches/" + matchId + "/tracking")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(eventBody("DISPATCHED")))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
     void acceptsAPositionOnlyEvent() throws Exception {
         // The schema's "position or status" rule: coordinates alone are a valid event.
         UUID matchId = seedMatch("ACCEPTED");
