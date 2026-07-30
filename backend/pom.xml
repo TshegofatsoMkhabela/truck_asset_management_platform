@@ -76,11 +76,14 @@
             <scope>test</scope>
         </dependency>
 
-        <!-- Renders Swagger UI (the browser page generated from a service's OpenAPI
-             description, where each endpoint can be filled in and executed live) from the
-             annotations below. Added here because #10's own acceptance criteria require it
-             today; #9 will also add this dependency, and the duplicate resolves to one copy
-             on merge. -->
+        <!-- Brief section 7 lists an OpenAPI file as a required submission artifact, and
+             section 2.2 names Swagger/OpenAPI as the back-end demonstration vehicle; every
+             feature issue from #10 onward also carries its own OpenAPI acceptance criterion.
+             Both #10 and #13 independently added this dependency for that reason, discovered
+             as a merge conflict rather than planned; kept here as one copy on #10's version,
+             since #10 merged to main first and #13's own dependency was already satisfying
+             the same need. Auto-exposes /swagger-ui.html and /v3/api-docs with zero
+             configuration beyond this dependency. -->
         <dependency>
             <groupId>org.springdoc</groupId>
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
