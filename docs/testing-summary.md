@@ -53,15 +53,29 @@ the row says so rather than carrying a placeholder.
 | T-40 | `GET /loads/{id}` with unknown ID returns 404 | backend (web) | Random UUID in path returns 404 with error message | As expected | ✅ Pass | #11 |
 | T-41 | Creating a load writes an `audit_logs` row with action=LOAD_POSTED | backend (web) | POST /loads triggers insert into audit_logs with actorId=ownerId, action="LOAD_POSTED", entityType="load" | As expected | ✅ Pass | #11 |
 | T-42 | `POST /loads` rejects invalid cargo type, non-positive weight/volume, blank cities | backend (web) | DTO validation (Jakarta Bean Validation) rejects GENERAL+INVALID, weightKg=0, blank originCity (HTTP 400) | As expected | ✅ Pass | #11 |
-| T-43 | `GlobalExceptionHandler` maps a validation failure, an authentication failure and an access-denial to the documented `ApiError` shape with the correct status (3 tests) | backend | 400/401/403 with `status`, `error`, `message`, `fieldErrors` populated as appropriate | As expected | ✅ Pass | #9 |
-| T-44 | `AuditService.record` writes an `AuditLog` with the actor, action, entity type/id and details it was given | backend | Saved entity's fields match the call arguments exactly | As expected | ✅ Pass | #9 |
-| T-45 | `POST /auth/register` hashes the password (never stores or returns it), writes a `REGISTERED` audit event, rejects a blank field with the documented validation shape, and rejects a duplicate email with 409 (4 tests) | backend | Stored hash starts with `$2` (BCrypt) and differs from the raw password; exactly one audit row; 400 with `fieldErrors.fullName` on a blank name; 409 `EMAIL_ALREADY_REGISTERED` on a repeat email | As expected | ✅ Pass | #9 |
-| T-46 | `JwtService` issues a token that parses back to the same user id and role via both the individual accessors and the combined `parseToken`, and rejects a token signed with a different key (3 tests) | backend | Round-trip matches; cross-key token throws `SignatureException` | As expected | ✅ Pass | #9 |
-| T-47 | `POST /auth/login` returns a token and the user for valid credentials, returns the documented 401 shape for a wrong password and for an unknown email with the same body, and writes a `LOGGED_IN` audit event (4 tests) | backend | 200 with `token`/`user`; 401 `UNAUTHENTICATED` for a wrong password and for an unknown email, both with identical body; one `LOGGED_IN` row after login | As expected | ✅ Pass | #9 |
-| T-48 | `JwtAuthenticationFilter` authenticates a request carrying a valid bearer token, leaves the security context empty for a missing, malformed, or JWT-rejected header, and propagates (rather than swallows) an unrelated `RuntimeException` from `JwtService` (5 tests) | backend | Context holds the token's user id and `ROLE_<role>` only for a genuinely valid bearer token; a non-JWT exception is not caught | As expected | ✅ Pass | #9 |
-| T-49 | The filter chain keeps `/health`, `/`, `/auth/register` and `/auth/login` public while rejecting an unauthenticated request to any other path with 401 (4 tests) | backend | Public routes 200/400; unlisted route 401 with the documented shape | As expected | ✅ Pass | #9 |
-| T-50 | **`GET /audit` allows an Admin token, rejects a non-Admin token with 403, and rejects a missing token with 401** (issue #9 Minimum Integration Test, 3 tests) | backend | 200 for Admin; 403 `ACCESS_DENIED` for a Transporter; 401 `UNAUTHENTICATED` for no token | As expected | ✅ Pass | #9 |
-| T-51 | The generated OpenAPI description lists `/auth/register`, `/auth/login` and `/audit` and declares the `bearerAuth` scheme; Swagger UI's page loads, both without a token (2 tests) | backend | 200 for `/v3/api-docs` and `/swagger-ui/index.html`; `components.securitySchemes.bearerAuth.scheme` is `bearer` | As expected | ✅ Pass | #9 |
+| T-43 | **Advance a match's tracking status via the API, fetch it back, and confirm it persisted** (issue #15 Minimum Integration Test) | backend (web) | Two POSTs (IN_TRANSIT then DELIVERED) to `/matches/{id}/tracking` each return 201; GET returns both events oldest-first | As expected | ✅ Pass | #15 |
+| T-44 | A position-only event (coordinates, no status) is accepted, matching the schema's "position or status" rule | backend (web) | 201 with the coordinates echoed and `status` null | As expected | ✅ Pass | #15 |
+| T-45 | An event carrying neither a status nor a coordinate pair is rejected before reaching the database | backend (web) | 400 from DTO validation, not a database-constraint 500 | As expected | ✅ Pass | #15 |
+| T-46 | Tracking a match that exists but is not ACCEPTED is refused | backend (web) | 409 with a message naming the match's actual status | As expected | ✅ Pass | #15 |
+| T-47 | Tracking endpoints with an unknown match id return 404 on both POST and GET | backend (web) | 404, not an unhandled 500 | As expected | ✅ Pass | #15 |
+| T-48 | **Admin reads `/admin/metrics` and the counts cover the rows seeded in the test; a non-admin is rejected from the same endpoint** (issue #17 Minimum Integration Test, with T-49) | backend (web) | 200 with `users`/`loads`/`trucks`/`matches` counts at least covering the seeded rows | As expected | ✅ Pass | #17 |
+| T-49 | Every `/admin/*` endpoint refuses a TRANSPORTER's id | backend (web) | 403 on metrics, users, audit-logs and disputes | As expected | ✅ Pass | #17 |
+| T-50 | An unknown `adminId` gets the same 403 as a non-admin (no user-enumeration hint) | backend (web) | 403, indistinguishable from the non-admin case | As expected | ✅ Pass | #17 |
+| T-51 | `GET /admin/users` lists users with role and compliance status | backend (web) | Seeded FREIGHT_OWNER shows `complianceStatus: PENDING`; the admin shows `role: ADMIN` | As expected | ✅ Pass | #17 |
+| T-52 | `GET /admin/audit-logs` returns the audit trail; `GET /admin/disputes` returns a seeded dispute with its OPEN status | backend (web) | Audit listing is a well-formed array; the seeded dispute appears with description and status | As expected | ✅ Pass | #17 |
+| T-53 | `AcceptanceCoordinator` persists a decision with its actor and audit event, refuses a second decision on an already-decided match, and refuses an unknown match (3 tests) | backend | Status, `decidedBy` and `decidedAt` all set; `MATCH_ACCEPTED` audit event written; second decision throws rather than writing | As expected | ✅ Pass | #14 |
+| T-54 | The decision endpoint returns the right status for each outcome a caller can trigger: success, unknown match, already decided, an invalid decision value, and an `actorId` naming no existing user (5 tests) | backend | 200, 404, 409, 400, 400 respectively. The last was added by this issue's own adversarial review, which found it returned 500 | As expected | ✅ Pass | #14 |
+| T-55 | **A match is accepted via the API, then its receipt is fetched and contains the right match, actor and a generated contract ID** (issue #14 Minimum Integration Test), and a rejection issues no receipt (2 tests) | backend | Receipt returns `contractId` starting `TAMP-`, plus the captured IP and user-agent; a rejected match returns 404 from the receipt endpoint | As expected | ✅ Pass | #14 |
+| T-56 | The full post-acceptance journey runs against the seeded database over real HTTP: accept, fetch receipt, advance a trip through three stages, read it back, and every guard refuses correctly | backend + db (docker) | Real contract ID issued; 3 tracking events returned in order; 409 on re-decide, 409 on tracking a proposed match, 400 on an unknown status, 404 on a missing receipt | As expected, see evidence below | ✅ Pass | #14/#15 |
+| T-57 | `GlobalExceptionHandler` maps a validation failure, an authentication failure and an access-denial to the documented `ApiError` shape with the correct status (3 tests) | backend | 400/401/403 with `status`, `error`, `message`, `fieldErrors` populated as appropriate | As expected | ✅ Pass | #9 |
+| T-58 | `AuditService.record` writes an `AuditLog` with the actor, action, entity type/id and details it was given | backend | Saved entity's fields match the call arguments exactly | As expected | ✅ Pass | #9 |
+| T-59 | `POST /auth/register` hashes the password (never stores or returns it), writes a `REGISTERED` audit event, rejects a blank field with the documented validation shape, and rejects a duplicate email with 409 (4 tests) | backend | Stored hash starts with `$2` (BCrypt) and differs from the raw password; exactly one audit row; 400 with `fieldErrors.fullName` on a blank name; 409 `EMAIL_ALREADY_REGISTERED` on a repeat email | As expected | ✅ Pass | #9 |
+| T-60 | `JwtService` issues a token that parses back to the same user id and role via both the individual accessors and the combined `parseToken`, and rejects a token signed with a different key (3 tests) | backend | Round-trip matches; cross-key token throws `SignatureException` | As expected | ✅ Pass | #9 |
+| T-61 | `POST /auth/login` returns a token and the user for valid credentials, returns the documented 401 shape for a wrong password and for an unknown email with the same body, and writes a `LOGGED_IN` audit event (4 tests) | backend | 200 with `token`/`user`; 401 `UNAUTHENTICATED` for a wrong password and for an unknown email, both with identical body; one `LOGGED_IN` row after login | As expected | ✅ Pass | #9 |
+| T-62 | `JwtAuthenticationFilter` authenticates a request carrying a valid bearer token, leaves the security context empty for a missing, malformed, or JWT-rejected header, and propagates (rather than swallows) an unrelated `RuntimeException` from `JwtService` (5 tests) | backend | Context holds the token's user id and `ROLE_<role>` only for a genuinely valid bearer token; a non-JWT exception is not caught | As expected | ✅ Pass | #9 |
+| T-63 | The filter chain keeps `/health`, `/`, `/auth/register` and `/auth/login` public while rejecting an unauthenticated request to any other path with 401 (4 tests) | backend | Public routes 200/400; unlisted route 401 with the documented shape | As expected | ✅ Pass | #9 |
+| T-64 | **`GET /audit` allows an Admin token, rejects a non-Admin token with 403, and rejects a missing token with 401** (issue #9 Minimum Integration Test, 3 tests) | backend | 200 for Admin; 403 `ACCESS_DENIED` for a Transporter; 401 `UNAUTHENTICATED` for no token | As expected | ✅ Pass | #9 |
+| T-65 | The generated OpenAPI description lists `/auth/register`, `/auth/login` and `/audit` and declares the `bearerAuth` scheme; Swagger UI's page loads, both without a token (2 tests) | backend | 200 for `/v3/api-docs` and `/swagger-ui/index.html`; `components.securitySchemes.bearerAuth.scheme` is `bearer` | As expected | ✅ Pass | #9 |
 
 ### Evidence for T-19–T-22
 
@@ -217,6 +231,54 @@ answer `/health` with an identical shape, so a misconfigured port mapping could 
 a probe to the wrong service and still return `{"status":"UP"}`. The service name is
 what distinguishes them.
 
+### Evidence for T-56
+
+Re-run against the merged tree, so this records the code that actually ships: acceptance and
+receipts from this PR, tracking from #33. Port 55433 because 5432 was held by an unrelated
+container, the conflict the README documents.
+
+```
+$ curl -X POST http://localhost:8080/matches/$MATCH/decision     -H "Content-Type: application/json"     -d '{"decision": "ACCEPTED", "actorId": "00000000-0000-7000-8000-000000000001"}'
+{"matchId":"019fb19d-...","status":"ACCEPTED",
+ "decidedBy":"00000000-0000-7000-8000-000000000001","decidedAt":"2026-07-30T08:47:39.05+02:00"}
+
+$ curl http://localhost:8080/matches/$MATCH/receipt
+{"id":"019fb1c7-...","contractId":"TAMP-2026-20D29C52FB","matchId":"019fb19d-...",
+ "decision":"ACCEPTED","actorId":"00000000-0000-7000-8000-000000000001",
+ "ipAddress":"::1","userAgent":"curl/8.17.0","issuedAt":"2026-07-30T06:47:38.39Z"}
+
+$ curl http://localhost:8080/matches/$MATCH/tracking          # after 2 POSTs, both 201
+[{"id":"019fb1c7-573e-...","matchId":"019fb19d-...","latitude":null,"longitude":null,
+  "status":"DISPATCHED","occurredAt":"2026-07-30T06:47:39.070202Z"},
+ {"id":"019fb1c7-580f-...","matchId":"019fb19d-...","latitude":-29.858680,
+  "longitude":31.021840,"status":"DELIVERED","occurredAt":"2026-07-30T06:47:39.279192Z"}]
+
+$ # guards owned by this PR
+  re-decide an accepted match                    HTTP 409
+  decision value "MAYBE"                         HTTP 400
+  actorId naming no existing user                HTTP 400
+    "The request referenced a user that does not exist. Check actorId against a real user id."
+  GET receipt for a match with none              HTTP 404
+    "A receipt is issued only on acceptance."
+```
+
+The `contractId` is real, not illustrative: it is generated by the database default on
+`receipts.contract_id`, so a `TAMP-` value in the response is what proves the receipt was read
+back after insert rather than returned from the persistence context that wrote it. It differs
+from the value recorded in earlier drafts of this section because each run issues a new one.
+
+Two manual checks in this section first appeared to fail, and in both cases the check was wrong
+rather than the code. Tracking a match returned 201 where 409 was expected, and deciding with a
+bogus `actorId` returned 409 where 400 was expected. Both used ids from #7's seed data, which
+creates matches already in an `ACCEPTED` state, so in the first case tracking was legitimately
+allowed and in the second the already-decided guard correctly fired before the actor was ever
+examined. Re-run against genuinely `PROPOSED` matches, both returned what was expected.
+
+The transferable point, since this happened twice: **seeded fixtures carry state**, so a manual
+check of a guard has to assert the precondition it depends on, or it silently tests a different
+branch than intended. The automated tests never had this problem, because `MatchFixture` builds
+a match in a known state for every case.
+
 ## Coverage
 
 Line coverage, gated at **80% per service**. CI fails the job below that bar.
@@ -228,7 +290,7 @@ executable lines a test run touched at least once.
 
 | Service | Tool | Line coverage | Gate | Status |
 |---|---|---|---|---|
-| backend | JaCoCo 0.8.12 | **96.9%** (533/550 lines) | 80% | ✅ Pass |
+| backend | JaCoCo 0.8.12 | **97.9%** (693/708 lines) | 80% | ✅ Pass |
 | matching-service | pytest-cov | **100%** (165/165 lines) | 80% | ✅ Pass |
 
 Reports are uploaded as CI artifacts (`coverage-backend`, `coverage-matching-service`)
@@ -247,12 +309,27 @@ Nothing is excluded on the Python side.
 
 The backend figure was recorded as 100% (4/4 lines) when #2 landed, then 95% (19/20) once
 #6's schema tests were measured against the merged state of #2/#4/#5, then 93.5% (200/214)
-once #6 grew to include the JPA persistence layer. It reached 92.6% (249/269) once #13 added
-the matching coordinator, controller and DTOs and removed `IntegrationController`, then
-91.2% (936/1026) once #10's user/profile work and #8's Dockerfiles landed in the same tree.
-It is now **96.9% (533/550 lines)**, remeasured after merging #9's auth, RBAC, audit trail and
-OpenAPI documentation code alongside #11's load postings and #12's trucks endpoint into that
-same tree. All figures here are taken from the JaCoCo CSV directly, not estimated.
+once #6 grew to include the JPA persistence layer. It is now **92.6% (249/269)**, remeasured
+after #13 added the matching coordinator, controller and DTOs and removed
+`IntegrationController` (the e2e-only line that accounted for one previous gap disappeared
+with the class it was in). 20 lines remain uncovered per `target/site/jacoco/jacoco.csv`: 3
+in `InetAddressConverter`, 1–4 each across `Dispute`, `ComplianceDocument`, `Truck`, `User`,
+`Match` and `Load` (unused accessors, as before), and 1, 3 and 3 in `GenerateMatchesRequest`,
+`MatchController` and `MatchSummary` respectively. The last of these is a genuine, honestly
+recorded gap rather than an accessor: `MatchController.generateMatches(...)` itself is never
+called by any test. `MatchingCoordinatorTest` calls the coordinator directly, and the real
+curl in this PR's Testing Guide exercises the controller manually but is not an automated
+test. A `MockMvc`-based controller test would close this; not written here because the
+coordinator (where the actual logic lives) is already fully covered and the controller
+method is a two-line pass-through. All figures here are taken from the JaCoCo CSV directly,
+not estimated.
+
+**Correction to a figure this table carried for four issues.** #13's row read "91.2% (936/1026 lines)", #11 carried the same shape forward as "91.1% (936/1026 lines)", and #17 recorded "96% (1919/1992 instructions)", which is correctly labelled but still sat under a column headed "Line coverage" next to a gate configured on lines. That number was *instruction* coverage, not line coverage: it was summed from columns 4 and 5 of `jacoco.csv` (`INSTRUCTION_MISSED`/`INSTRUCTION_COVERED`) rather than columns 8 and 9. The JaCoCo gate itself is configured on `<counter>LINE</counter>`, so the build was always measuring the right thing and nothing was ever passed that should have failed. Only the hand-written summary read the wrong columns, which is exactly why the error stayed invisible: a wrong number in a document fails no test. Every figure in this table is now taken from columns 8 and 9. The identical 936/1026 appearing under two different percentages across separate issues is the tell that it was being copied forward rather than remeasured.
+
+It is now **97.9% (693/708 lines)**, remeasured on the merged tree carrying #9's auth/RBAC/audit
+trail, #14's acceptance and receipts, #15's tracking, #11's loads, #12's trucks and #17's admin
+endpoints. Measured on the merge rather than carried over from either side, since the bundle is
+neither one alone.
 
 ## Known defects
 
