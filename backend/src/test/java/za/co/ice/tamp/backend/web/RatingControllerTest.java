@@ -56,25 +56,27 @@ class RatingControllerTest extends JpaTestBase {
     @Autowired
     private RatingRepository ratingRepository;
 
-    private UUID seedUsers() {
-        String ownerEmail = "owner." + UUID.randomUUID() + "@test.com";
-        String transporterEmail = "transporter." + UUID.randomUUID() + "@test.com";
-        User owner = userRepository.save(
-                new User("Owner", ownerEmail, "hash1", "FREIGHT_OWNER"));
-        userRepository.save(
-                new User("Transporter", transporterEmail, "hash2", "TRANSPORTER"));
-        return owner.getId();
+    /**
+     * The match a test seeded, together with the two users actually party to it.
+     *
+     * <p>Returning the users matters. The Testcontainers Postgres is shared across the whole
+     * test JVM and never truncated, so {@code userRepository.findAll()} sees every user any
+     * other test has ever created. Picking a rater or ratee out of that list gives whichever
+     * user happens to sort first, not the one this match belongs to.
+     */
+    private record Fixture(UUID matchId, User owner, User transporter) {
     }
 
-    private UUID seedMatch() {
-        UUID ownerId = seedUsers();
-        User transporter = userRepository.findAll().stream()
-                .filter(u -> "TRANSPORTER".equals(u.getRole()))
-                .findFirst()
-                .orElseThrow();
+    private Fixture seedMatch() {
+        String suffix = UUID.randomUUID().toString();
+        User owner = userRepository.save(
+                new User("Owner", "owner." + suffix + "@test.com", "hash1", "FREIGHT_OWNER"));
+        User transporter = userRepository.save(
+                new User("Transporter", "transporter." + suffix + "@test.com", "hash2",
+                        "TRANSPORTER"));
 
         Load load = loadRepository.save(new Load(
-                ownerId, "Johannesburg", "Cape Town", "GENERAL",
+                owner.getId(), "Johannesburg", "Cape Town", "GENERAL",
                 java.math.BigDecimal.valueOf(500),
                 java.math.BigDecimal.valueOf(2.5),
                 OffsetDateTime.now().plusDays(1),
@@ -92,7 +94,7 @@ class RatingControllerTest extends JpaTestBase {
                 load.getId(), truck.getId(), java.math.BigDecimal.valueOf(85),
                 java.util.List.of("capacity sufficient")));
 
-        return match.getId();
+        return new Fixture(match.getId(), owner, transporter);
     }
 
     private String ratingBody(Short score, String comment) {
@@ -106,15 +108,10 @@ class RatingControllerTest extends JpaTestBase {
 
     @Test
     void submitsRatingForCompletedMatch() throws Exception {
-        UUID matchId = seedMatch();
-        User transporter = userRepository.findAll().stream()
-                .filter(u -> "TRANSPORTER".equals(u.getRole()))
-                .findFirst()
-                .orElseThrow();
-        User owner = userRepository.findAll().stream()
-                .filter(u -> "FREIGHT_OWNER".equals(u.getRole()))
-                .findFirst()
-                .orElseThrow();
+        Fixture fixture = seedMatch();
+        UUID matchId = fixture.matchId();
+        User transporter = fixture.transporter();
+        User owner = fixture.owner();
 
         MvcResult result = mockMvc.perform(
                         post("/matches/{matchId}/ratings", matchId)
@@ -139,15 +136,10 @@ class RatingControllerTest extends JpaTestBase {
 
     @Test
     void listRatingsForMatch() throws Exception {
-        UUID matchId = seedMatch();
-        User transporter = userRepository.findAll().stream()
-                .filter(u -> "TRANSPORTER".equals(u.getRole()))
-                .findFirst()
-                .orElseThrow();
-        User owner = userRepository.findAll().stream()
-                .filter(u -> "FREIGHT_OWNER".equals(u.getRole()))
-                .findFirst()
-                .orElseThrow();
+        Fixture fixture = seedMatch();
+        UUID matchId = fixture.matchId();
+        User transporter = fixture.transporter();
+        User owner = fixture.owner();
 
         // Submit rating from transporter to owner
         mockMvc.perform(
@@ -168,15 +160,10 @@ class RatingControllerTest extends JpaTestBase {
 
     @Test
     void listRatingsForUser() throws Exception {
-        UUID matchId = seedMatch();
-        User transporter = userRepository.findAll().stream()
-                .filter(u -> "TRANSPORTER".equals(u.getRole()))
-                .findFirst()
-                .orElseThrow();
-        User owner = userRepository.findAll().stream()
-                .filter(u -> "FREIGHT_OWNER".equals(u.getRole()))
-                .findFirst()
-                .orElseThrow();
+        Fixture fixture = seedMatch();
+        UUID matchId = fixture.matchId();
+        User transporter = fixture.transporter();
+        User owner = fixture.owner();
 
         // Submit rating from transporter to owner
         mockMvc.perform(
