@@ -7,8 +7,13 @@ import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
+/**
+ * {@code transporterId} is optional here, not {@code @NotNull}: {@link za.co.ice.tamp.backend.web.TruckController}
+ * overrides it with the caller's JWT id when a real {@code Authorization: Bearer} token is
+ * presented, and rejects the request with a clear 400 if neither a token nor this field
+ * supplied one.
+ */
 public record CreateTruckRequest(
-        @NotNull(message = "transporterId is required")
         UUID transporterId,
 
         @NotBlank(message = "vehicleType is required")

@@ -24,15 +24,11 @@ import za.co.ice.tamp.backend.web.dto.UserResponse;
 
 /**
  * CRUD (create, read, update, delete, though this issue builds only the first three) for
- * user profile and compliance data (FR-02, basic identity/compliance information).
+ * user profile and compliance data.
  *
  * <p>Talks directly to {@link UserRepository} with no intervening service class: there is no
  * business rule here beyond validation and a not-found check, matching this codebase's
  * existing precedent ({@code IntegrationController} has no service layer either).
- *
- * <p>Deliberately unauthenticated: #9 (RBAC, role-based access control, and auth) owns role
- * enforcement and has not merged yet. The role each operation will eventually require is
- * documented in Step 5's OpenAPI annotations rather than enforced here.
  */
 @RestController
 public class UserController {
@@ -46,9 +42,7 @@ public class UserController {
     }
 
     @Operation(
-            summary = "Register a new user profile. Requires no role yet: RBAC (role-based "
-                    + "access control) is added by #9; once merged this becomes an unauthenticated "
-                    + "public endpoint, since registration itself has no caller to authenticate.",
+            summary = "Register a new user profile.",
             requestBody = @io.swagger.v3.oas.annotations.parameters.RequestBody(
                     content = @Content(examples = @ExampleObject(value = """
                             {
@@ -78,8 +72,7 @@ public class UserController {
         return ResponseEntity.status(HttpStatus.CREATED).body(UserResponse.from(persisted));
     }
 
-    @Operation(summary = "Fetch a user's profile and compliance status. Requires the caller's "
-            + "own user id or ADMIN once #9's RBAC lands; unenforced today.")
+    @Operation(summary = "Fetch a user's profile and compliance status.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "User found"),
             @ApiResponse(responseCode = "404", description = "No user with this id")
@@ -90,9 +83,7 @@ public class UserController {
     }
 
     @Operation(
-            summary = "Partially update a profile or set the compliance/verification status. "
-                    + "Requires ADMIN for complianceStatus, or the profile's own owner for fullName, "
-                    + "once #9's RBAC lands; unenforced today.",
+            summary = "Partially update a profile or set the compliance/verification status.",
             requestBody = @io.swagger.v3.oas.annotations.parameters.RequestBody(
                     content = @Content(examples = @ExampleObject(value = """
                             { "complianceStatus": "APPROVED" }"""))))

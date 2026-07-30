@@ -5,11 +5,12 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 import za.co.ice.tamp.backend.persistence.repository.AuditLogRepository;
+import za.co.ice.tamp.backend.web.dto.AuditLogResponse;
 
 /**
- * Backs FR-12 (key actions available in an audit trail) and the Administration domain's "audit
- * events" requirement: an Admin can retrieve the trail written from registration and login
- * onward. Restricted to Admin, since the trail can include actions by every user.
+ * Backs the "key actions available in an audit trail" requirement: an Admin can retrieve the
+ * trail written from registration and login onward. Restricted to Admin, since the trail can
+ * include actions by every user.
  */
 @RestController
 public class AuditController {

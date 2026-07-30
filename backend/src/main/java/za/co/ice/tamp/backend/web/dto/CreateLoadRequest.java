@@ -11,17 +11,18 @@ import java.util.UUID;
 /**
  * The body of {@code POST /loads}.
  *
- * <p>{@code ownerId} is accepted as an explicit field, not read from an authenticated
- * principal: #9 (RBAC and auth) has not merged, so there is no principal to read yet. This is
- * a deliberate, temporary seam, replaced by the authenticated caller's own id once #9 lands,
- * not a permanent design choice.
+ * <p>{@code ownerId} is optional here, not {@code @NotNull}: {@link za.co.ice.tamp.backend.web.LoadController}
+ * overrides it with the caller's JWT id when a real {@code Authorization: Bearer} token is
+ * presented (see {@link za.co.ice.tamp.backend.security.CurrentUser}), and rejects the request
+ * itself with a clear 400 if neither a token nor this field supplied one. Not a permanent
+ * design choice; see known-limitations.md for the larger gap this is a stopgap for.
  *
  * <p>{@code cargoType} is validated here against the same six values the database's
  * {@code CHECK} constraint on {@code loads.cargo_type} enforces, so an invalid type is
  * rejected with a 400 before it reaches Postgres.
  */
 public record CreateLoadRequest(
-        @NotNull UUID ownerId,
+        UUID ownerId,
         @NotBlank String originCity,
         @NotBlank String destinationCity,
         @NotBlank @Pattern(regexp = "GENERAL|REFRIGERATED|HAZARDOUS|LIQUID|CONTAINER|BULK") String cargoType,

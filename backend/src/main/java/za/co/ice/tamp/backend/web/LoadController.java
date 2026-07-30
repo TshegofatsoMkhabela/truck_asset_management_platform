@@ -13,6 +13,7 @@ import java.util.UUID;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -27,20 +28,23 @@ import za.co.ice.tamp.backend.persistence.entity.AuditLog;
 import za.co.ice.tamp.backend.persistence.entity.Load;
 import za.co.ice.tamp.backend.persistence.repository.AuditLogRepository;
 import za.co.ice.tamp.backend.persistence.repository.LoadRepository;
+import za.co.ice.tamp.backend.security.CurrentUser;
 import za.co.ice.tamp.backend.web.dto.CreateLoadRequest;
 import za.co.ice.tamp.backend.web.dto.LoadResponse;
 import za.co.ice.tamp.backend.web.dto.UpdateLoadRequest;
 
 /**
- * CRUD for cargo load postings (FR-03, Freight Owner can create and view cargo loads).
+ * CRUD for cargo load postings: a Freight Owner can create and view cargo loads.
  *
  * <p>Talks directly to {@link LoadRepository} with no intervening service class, matching
  * #10's precedent for plain CRUD with a not-found check.
  *
- * <p>Deliberately unauthenticated: #9 (RBAC, role-based access control, and auth) owns role
- * enforcement and has not merged yet. {@code ownerId} is accepted as an explicit field/query
- * parameter rather than read from an authenticated principal for the same reason; both are
- * documented in the OpenAPI summaries as temporary, replaced once #9 lands.
+ * <p>Deliberately unauthenticated: #9 (RBAC, role-based access control, and auth) built login
+ * and JWT issuance but never wired role checks into this controller. {@code ownerId} is still
+ * accepted as an explicit field/query parameter for a caller with no token, but
+ * {@link CurrentUser} now overrides it with the JWT's own id when a real
+ * {@code Authorization: Bearer} header is present; see known-limitations.md for why this
+ * stops short of actually requiring one.
  */
 @RestController
 public class LoadController {
@@ -61,16 +65,18 @@ public class LoadController {
     @PostMapping("/loads")
     @Operation(summary = "Create a new cargo load posting",
             description = "Freight owner creates a load posting. "
-                    + "ownerId is temporary (seam until #9 auth/RBAC merges); "
-                    + "it will be read from the authenticated principal instead.")
+                    + "ownerId is a caller-supplied field, not read from the authenticated "
+                    + "principal (see known-limitations.md).")
     @ApiResponses({
         @ApiResponse(responseCode = "201", description = "Load created",
                 content = @Content(schema = @Schema(implementation = LoadResponse.class))),
         @ApiResponse(responseCode = "400", description = "Validation failed (invalid cargo type, non-positive weight, etc.)")
     })
-    public ResponseEntity<LoadResponse> create(@Valid @RequestBody CreateLoadRequest request) {
+    public ResponseEntity<LoadResponse> create(@Valid @RequestBody CreateLoadRequest request,
+            Authentication authentication) {
+        UUID ownerId = CurrentUser.requireIdOrFallback(authentication, request.ownerId(), "ownerId");
         Load load = new Load(
-                request.ownerId(),
+                ownerId,
                 request.originCity(),
                 request.destinationCity(),
                 request.cargoType(),
@@ -89,7 +95,7 @@ public class LoadController {
         // request's transaction. This avoids Hibernate trying to UPDATE the append-only
         // audit_logs table when this transaction commits. Use selfProxy to ensure the
         // @Transactional annotation on the helper method is honored.
-        selfProxy.getObject().writeAuditInNewTransaction(request.ownerId(), persisted);
+        selfProxy.getObject().writeAuditInNewTransaction(ownerId, persisted);
 
         return ResponseEntity.status(HttpStatus.CREATED).body(LoadResponse.from(persisted));
     }
@@ -107,13 +113,14 @@ public class LoadController {
 
     @GetMapping("/loads")
     @Operation(summary = "List all loads for an owner",
-            description = "ownerId is temporary (seam until #9 auth/RBAC merges); "
-                    + "it will be filtered from the authenticated principal instead.")
+            description = "ownerId is a caller-supplied query param, not filtered from an "
+                    + "authenticated principal (see known-limitations.md).")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "Loads retrieved (may be empty)")
     })
-    public List<LoadResponse> listByOwner(@RequestParam UUID ownerId) {
-        return loadRepository.findByOwnerId(ownerId).stream().map(LoadResponse::from).toList();
+    public List<LoadResponse> listByOwner(@RequestParam UUID ownerId, Authentication authentication) {
+        return loadRepository.findByOwnerId(CurrentUser.idOrFallback(authentication, ownerId))
+                .stream().map(LoadResponse::from).toList();
     }
 
     @PatchMapping("/loads/{id}")

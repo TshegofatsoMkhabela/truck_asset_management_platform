@@ -9,7 +9,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 /**
- * Proves the constraints on {@code ratings} (FR-09) and {@code audit_logs} (FR-12).
+ * Proves the constraints on {@code ratings} and {@code audit_logs}.
  *
  * <p>The audit tests are the inverse of every other test in this suite: they prove rows
  * survive rather than that bad rows are refused.

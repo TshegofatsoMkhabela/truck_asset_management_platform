@@ -9,7 +9,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 /**
- * Proves the constraints on {@code compliance_documents} (FR-02).
+ * Proves the constraints on {@code compliance_documents}.
  *
  * <p>Only metadata is stored. Brief section 2.2 asks for "mock compliance-document metadata",
  * and section 4.1 keeps real document handling out of scope, so no file content is persisted.
