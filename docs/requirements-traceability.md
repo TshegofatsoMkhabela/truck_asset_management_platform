@@ -7,10 +7,10 @@ Maps each functional requirement to the code that implements it. Every row start
 | ID | Requirement | Priority | Implemented by | Tests | Status |
 |---|---|---|---|---|---|
 | FR-01 | Role-based registration/login for Freight Owner, Transporter and Admin | Must | — | — | Not implemented |
-| FR-02 | Basic identity/compliance information and simulated document upload or metadata | Must | — | — | Not implemented |
+| FR-02 | Basic identity/compliance information and simulated document upload or metadata | Must | `POST /users`, `GET /users/{id}`, `PATCH /users/{id}` (#10) | `UserControllerTest` | Complete |
 | FR-03 | Freight Owner can create and view cargo loads | Must | — | — | Not implemented |
 | FR-04 | Transporter can create and view available trucks | Must | — | — | Not implemented |
-| FR-05 | Rule-based matching using compatibility, location and availability | Must | — | — | Not implemented |
+| FR-05 | Rule-based matching using compatibility, location and availability | Must | `matching_service.rules.find_eligible_matches` (matching-service), `POST /loads/{loadId}/matches` (`MatchController`, orchestrator) | `test_rules.py` (6 tests), `test_match.py` (2 tests), `MatchingServiceClientTest`, `MatchingCoordinatorTest` (2 tests), `MatchingTimingE2ETest` | Complete |
 | FR-06 | Users can accept or reject a match and the decision is logged | Must | — | — | Not implemented |
 | FR-07 | Accepted match produces a digital confirmation receipt | Must | — | — | Not implemented |
 | FR-08 | Trip tracking simulated using mock coordinates or status progression | Must | — | — | Not implemented |

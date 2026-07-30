@@ -1,10 +1,13 @@
 """TAMP matching service.
 
 Given a load and a set of candidate trucks, returns the eligible subset with a
-human-readable reason per match. Currently scaffolding only.
+human-readable reason per match.
 """
 
 from fastapi import FastAPI
+
+from matching_service.rules import Load, MatchResult, Truck, find_eligible_matches
+from matching_service.schemas import MatchRequest, MatchResponse, MatchResultOut
 
 app = FastAPI(
     title="TAMP Matching Service",
@@ -39,16 +42,44 @@ def health() -> dict[str, str]:
     }
 
 
-@app.get("/ping")
-def ping() -> dict[str, object]:
-    """Fixed target for the orchestrator's cross-service integration call (#5).
+@app.post(
+    "/match",
+    summary="Return eligible trucks for a load, ranked by capacity headroom",
+    description=(
+        "Applies the brief section 3.1 rules (capacity, cargo/vehicle "
+        "compatibility, availability overlap, location) to the supplied "
+        "candidate trucks and returns only the eligible subset, each with the "
+        "reasons it was recommended. No database access: the orchestrator "
+        "supplies every candidate truck in the request, since this service "
+        "stays stateless."
+    ),
+)
+def match(request: MatchRequest) -> MatchResponse:
+    load = Load(
+        id=request.load.id,
+        origin_city=request.load.origin_city,
+        cargo_type=request.load.cargo_type,
+        weight_kg=request.load.weight_kg,
+        pickup_window_start=request.load.pickup_window_start,
+        pickup_window_end=request.load.pickup_window_end,
+    )
+    trucks = [
+        Truck(
+            id=truck.id,
+            current_city=truck.current_city,
+            vehicle_type=truck.vehicle_type,
+            capacity_kg=truck.capacity_kg,
+            available_from=truck.available_from,
+            available_until=truck.available_until,
+        )
+        for truck in request.trucks
+    ]
 
-    Deliberately separate from ``/health``: this is a target for proving the
-    network round trip works, not a liveness contract. Keeping it apart means a
-    future change to ``/health`` (e.g. a database check in #7/#8) never breaks
-    the integration test for reasons unrelated to integration.
-    """
-    return {
-        "service": "matching-service",
-        "pong": True,
-    }
+    results: list[MatchResult] = find_eligible_matches(load, trucks)
+
+    return MatchResponse(
+        matches=[
+            MatchResultOut(truck_id=result.truck_id, score=result.score, reasons=result.reasons)
+            for result in results
+        ]
+    )
