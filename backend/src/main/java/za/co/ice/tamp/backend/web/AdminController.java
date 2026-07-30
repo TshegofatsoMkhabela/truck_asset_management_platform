@@ -8,7 +8,10 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -81,43 +84,56 @@ public class AdminController {
     }
 
     @GetMapping("/admin/users")
-    @Operation(summary = "List every user with their role and compliance status",
-            description = "Required role: ADMIN. adminId is temporary (seam until #9 auth/RBAC merges).")
+    @Operation(summary = "List every user with their role and compliance status, paginated",
+            description = "Required role: ADMIN. adminId is temporary (seam until #9 auth/RBAC merges). "
+                    + "page and size are standard Spring pagination params (default page=0, size=20, capped at 100).")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "Users retrieved"),
         @ApiResponse(responseCode = "403", description = "Caller is not an ADMIN")
     })
-    public List<UserResponse> users(@RequestParam UUID adminId) {
+    public List<UserResponse> users(@RequestParam UUID adminId,
+            @PageableDefault(size = 20, sort = "createdAt") Pageable pageable) {
         requireAdmin(adminId);
-        return userRepository.findAll(Sort.by("createdAt")).stream()
-                .map(UserResponse::from).toList();
+        return userRepository.findAll(cap(pageable)).map(UserResponse::from).toList();
     }
 
     @GetMapping("/admin/audit-logs")
-    @Operation(summary = "View the audit trail, newest entry first",
-            description = "Required role: ADMIN. adminId is temporary (seam until #9 auth/RBAC merges).")
+    @Operation(summary = "View the audit trail, newest entry first, paginated",
+            description = "Required role: ADMIN. adminId is temporary (seam until #9 auth/RBAC merges). "
+                    + "page and size are standard Spring pagination params (default page=0, size=20, capped at 100); "
+                    + "audit_logs is append-only and grows without bound, so an unpaged read is never safe.")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "Audit entries retrieved (may be empty)"),
         @ApiResponse(responseCode = "403", description = "Caller is not an ADMIN")
     })
-    public List<AuditLogResponse> auditLogs(@RequestParam UUID adminId) {
+    public List<AuditLogResponse> auditLogs(@RequestParam UUID adminId,
+            @PageableDefault(size = 20, sort = "occurredAt", direction = Sort.Direction.DESC) Pageable pageable) {
         requireAdmin(adminId);
-        return auditLogRepository.findAll(Sort.by(Sort.Direction.DESC, "occurredAt")).stream()
-                .map(AuditLogResponse::from).toList();
+        return auditLogRepository.findAll(cap(pageable)).map(AuditLogResponse::from).toList();
     }
 
     @GetMapping("/admin/disputes")
-    @Operation(summary = "List flagged and disputed items",
+    @Operation(summary = "List flagged and disputed items, paginated",
             description = "Required role: ADMIN. adminId is temporary (seam until #9 auth/RBAC merges). "
-                    + "Read-only oversight; resolution actions are out of this issue's scope.")
+                    + "Read-only oversight; resolution actions are out of this issue's scope. "
+                    + "page and size are standard Spring pagination params (default page=0, size=20, capped at 100).")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "Disputes retrieved (may be empty)"),
         @ApiResponse(responseCode = "403", description = "Caller is not an ADMIN")
     })
-    public List<DisputeResponse> disputes(@RequestParam UUID adminId) {
+    public List<DisputeResponse> disputes(@RequestParam UUID adminId,
+            @PageableDefault(size = 20, sort = "createdAt") Pageable pageable) {
         requireAdmin(adminId);
-        return disputeRepository.findAll(Sort.by("createdAt")).stream()
-                .map(DisputeResponse::from).toList();
+        return disputeRepository.findAll(cap(pageable)).map(DisputeResponse::from).toList();
+    }
+
+    /**
+     * Caps the page size at 100 regardless of what the caller requests, so a page=0&size=100000
+     * query can't defeat the pagination this fix exists to enforce.
+     */
+    private Pageable cap(Pageable pageable) {
+        int boundedSize = Math.min(pageable.getPageSize(), 100);
+        return PageRequest.of(pageable.getPageNumber(), boundedSize, pageable.getSort());
     }
 
     /**

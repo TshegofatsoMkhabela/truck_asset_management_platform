@@ -104,12 +104,34 @@ class AdminControllerTest extends JpaTestBase {
         UUID adminId = seedUser("ADMIN");
         UUID ownerId = seedUser("FREIGHT_OWNER");
 
-        mockMvc.perform(get("/admin/users").param("adminId", adminId.toString()))
+        // sort=createdAt,desc so the users just seeded (necessarily the newest in the
+        // shared container) land on page 0 regardless of how many other tests ran first.
+        mockMvc.perform(get("/admin/users")
+                        .param("adminId", adminId.toString())
+                        .param("sort", "createdAt,desc")
+                        .param("size", "5"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[?(@.id == '" + ownerId + "')].complianceStatus")
                         .value(Matchers.contains("PENDING")))
                 .andExpect(jsonPath("$[?(@.id == '" + adminId + "')].role")
                         .value(Matchers.contains("ADMIN")));
+    }
+
+    @Test
+    void adminListingsAreCappedByPageSize() throws Exception {
+        // The container is shared across test classes and accumulates rows over the whole
+        // suite, so users/audit-logs/disputes must be paged rather than returned whole.
+        UUID adminId = seedUser("ADMIN");
+        for (int i = 0; i < 3; i++) {
+            seedUser("FREIGHT_OWNER");
+        }
+
+        mockMvc.perform(get("/admin/users")
+                        .param("adminId", adminId.toString())
+                        .param("page", "0")
+                        .param("size", "2"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", org.hamcrest.Matchers.hasSize(2)));
     }
 
     @Test
