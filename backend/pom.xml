@@ -60,6 +60,18 @@
             <artifactId>testcontainers-postgresql</artifactId>
             <scope>test</scope>
         </dependency>
+
+        <!-- Brief section 7 lists an OpenAPI file as a required submission artifact, and
+             section 2.2 names Swagger/OpenAPI as the back-end demonstration vehicle; every
+             feature issue from #10 onward also carries its own OpenAPI acceptance criterion.
+             Adding this here, in #13, since it is a project-wide prerequisite none of those
+             issues can satisfy without it, not a decision specific to matching. Auto-exposes
+             /swagger-ui.html and /v3/api-docs with zero configuration beyond this dependency. -->
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+            <version>2.6.0</version>
+        </dependency>
     </dependencies>
 
     <build>
