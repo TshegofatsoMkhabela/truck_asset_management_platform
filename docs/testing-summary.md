@@ -29,6 +29,15 @@ the row says so rather than carrying a placeholder.
 | T-16 | `updated_at` advances on modification and equals `created_at` on insert (3 tests) | backend (db) | `updated_at > created_at` after an UPDATE | As expected | ✅ Pass | #6 |
 | T-17 | `spring.jpa.hibernate.ddl-auto: validate` rejects a deliberately mismatched entity | backend (persistence) | Application context fails to start | As expected | ✅ Pass | #6 |
 | T-18 | Every one of the 10 JPA entities round-trips through its repository: generated id, `JSONB` (`matches.reasons`, `audit_logs.details`), `CITEXT` (case-insensitive `findByEmail`), `INET` (`receipts.ip_address`), and each derived query method (12 tests) | backend (persistence) | Save then read-back matches; derived queries return only the matching rows | As expected | ✅ Pass | #6 |
+| T-19 | `GlobalExceptionHandler` maps a validation failure, an authentication failure and an access-denial to the documented `ApiError` shape with the correct status (3 tests) | backend | 400/401/403 with `status`, `error`, `message`, `fieldErrors` populated as appropriate | As expected | ✅ Pass | #9 |
+| T-20 | `AuditService.record` writes an `AuditLog` with the actor, action, entity type/id and details it was given | backend | Saved entity's fields match the call arguments exactly | As expected | ✅ Pass | #9 |
+| T-21 | `POST /auth/register` hashes the password (never stores or returns it) and writes a `REGISTERED` audit event; a blank field returns the documented validation shape (3 tests) | backend | Stored hash starts with `$2` (BCrypt) and differs from the raw password; exactly one audit row; 400 with `fieldErrors.fullName` on a blank name | As expected | ✅ Pass | #9 |
+| T-22 | `JwtService` issues a token that parses back to the same user id and role, and rejects a token signed with a different key (2 tests) | backend | Round-trip matches; cross-key token throws `SignatureException` | As expected | ✅ Pass | #9 |
+| T-23 | `POST /auth/login` returns a token and the user for valid credentials, returns the documented 401 shape for a wrong password, and writes a `LOGGED_IN` audit event (3 tests) | backend | 200 with `token`/`user`; 401 `UNAUTHENTICATED` for a wrong password; one `LOGGED_IN` row after login | As expected | ✅ Pass | #9 |
+| T-24 | `JwtAuthenticationFilter` authenticates a request carrying a valid bearer token and leaves the security context empty for a missing or malformed header (3 tests) | backend | Context holds the token's user id and `ROLE_<role>` only when the header is a genuinely valid bearer token | As expected | ✅ Pass | #9 |
+| T-25 | The filter chain keeps `/health`, `/`, `/auth/register` and `/auth/login` public while rejecting an unauthenticated request to any other path with 401 (4 tests) | backend | Public routes 200/400; unlisted route 401 with the documented shape | As expected | ✅ Pass | #9 |
+| T-26 | **`GET /audit` allows an Admin token, rejects a non-Admin token with 403, and rejects a missing token with 401** (issue #9 Minimum Integration Test, 3 tests) | backend | 200 for Admin; 403 `ACCESS_DENIED` for a Transporter; 401 `UNAUTHENTICATED` for no token | As expected | ✅ Pass | #9 |
+| T-27 | The generated OpenAPI description lists `/auth/register`, `/auth/login` and `/audit` and declares the `bearerAuth` scheme; Swagger UI's page loads, both without a token (2 tests) | backend | 200 for `/v3/api-docs` and `/swagger-ui/index.html`; `components.securitySchemes.bearerAuth.scheme` is `bearer` | As expected | ✅ Pass | #9 |
 
 T-08 to T-18 run against a real PostgreSQL 18 container started by **Testcontainers**, a
 library that starts and disposes of Docker containers around a test run, rather than an
@@ -64,7 +73,7 @@ executable lines a test run touched at least once.
 
 | Service | Tool | Line coverage | Gate | Status |
 |---|---|---|---|---|
-| backend | JaCoCo 0.8.12 | **93.5%** (200/214 lines) | 80% | ✅ Pass |
+| backend | JaCoCo 0.8.12 | **93.1%** (326/350 lines) | 80% | ✅ Pass |
 | matching-service | pytest-cov | **100%** (8/8 lines) | 80% | ✅ Pass |
 
 Reports are uploaded as CI artifacts (`coverage-backend`, `coverage-matching-service`)
@@ -84,13 +93,16 @@ Nothing is excluded on the Python side.
 The backend figure was recorded as 100% (4/4 lines) when #2 landed, then 95% (19/20) once
 #6's schema tests were measured against the merged state of #2/#4/#5 (the drop was
 `IntegrationController`'s `/integration/ping` handler, reachable only through the e2e-tagged
-T-07). It is now **93.5% (200/214)**, remeasured again after #6 grew to include the JPA persistence
-layer: 10 entities, 10 repositories, and their accessor and mapping code. 14 lines remain
-uncovered per `target/site/jacoco/jacoco.csv`: 1 in `IntegrationController` (the same e2e-only
-line as above), 3 in `InetAddressConverter`, and 1–4 each in `Dispute`, `ComplianceDocument`,
-`Truck`, `User`, `Match` and `Load` — small enough per class that no single test is missing,
-this is the ordinary residue of entity accessors no test path happens to touch. All figures
-here are taken from the JaCoCo CSV directly, not estimated.
+T-07). It reached 93.5% (200/214) once #6 grew to include the JPA persistence layer. It is
+now **93.1% (326/350)**, remeasured after #9 added the auth, RBAC and OpenAPI documentation
+code: registration, login, the JWT filter, and the two Security-layer error handlers. 24 lines
+remain uncovered per `target/site/jacoco/jacoco.csv`: the same pre-existing entity-accessor
+residue in `Dispute`, `ComplianceDocument`, `Truck`, `Match`, `Load` and `InetAddressConverter`,
+plus `IntegrationController`'s e2e-only line, and a small number of unexercised branches in
+`RestAccessDeniedHandler` and `JwtAuthenticationFilter` (defensive catch/write paths that only
+the request shapes covered by T-19 through T-27 currently reach). Each of these is a path no
+test happens to exercise, not a gap in what the acceptance criteria require. All figures here
+are taken from the JaCoCo CSV directly, not estimated.
 
 ## Known defects
 
