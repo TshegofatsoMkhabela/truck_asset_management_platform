@@ -1,5 +1,10 @@
 package za.co.ice.tamp.backend.web;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import jakarta.persistence.EntityManager;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -54,6 +59,15 @@ public class LoadController {
     }
 
     @PostMapping("/loads")
+    @Operation(summary = "Create a new cargo load posting",
+            description = "Freight owner creates a load posting. "
+                    + "ownerId is temporary (seam until #9 auth/RBAC merges); "
+                    + "it will be read from the authenticated principal instead.")
+    @ApiResponses({
+        @ApiResponse(responseCode = "201", description = "Load created",
+                content = @Content(schema = @Schema(implementation = LoadResponse.class))),
+        @ApiResponse(responseCode = "400", description = "Validation failed (invalid cargo type, non-positive weight, etc.)")
+    })
     public ResponseEntity<LoadResponse> create(@Valid @RequestBody CreateLoadRequest request) {
         Load load = new Load(
                 request.ownerId(),
@@ -81,16 +95,37 @@ public class LoadController {
     }
 
     @GetMapping("/loads/{id}")
+    @Operation(summary = "Fetch a load by ID")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Load found",
+                content = @Content(schema = @Schema(implementation = LoadResponse.class))),
+        @ApiResponse(responseCode = "404", description = "Load not found")
+    })
     public LoadResponse get(@PathVariable UUID id) {
         return LoadResponse.from(findOrThrow(id));
     }
 
     @GetMapping("/loads")
+    @Operation(summary = "List all loads for an owner",
+            description = "ownerId is temporary (seam until #9 auth/RBAC merges); "
+                    + "it will be filtered from the authenticated principal instead.")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Loads retrieved (may be empty)")
+    })
     public List<LoadResponse> listByOwner(@RequestParam UUID ownerId) {
         return loadRepository.findByOwnerId(ownerId).stream().map(LoadResponse::from).toList();
     }
 
     @PatchMapping("/loads/{id}")
+    @Operation(summary = "Update a load's status",
+            description = "Currently only status updates are supported (OPEN/MATCHED/IN_TRANSIT/DELIVERED/CANCELLED). "
+                    + "Post-creation corrections to origin, destination, etc. are not part of the brief.")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Load updated",
+                content = @Content(schema = @Schema(implementation = LoadResponse.class))),
+        @ApiResponse(responseCode = "404", description = "Load not found"),
+        @ApiResponse(responseCode = "400", description = "Invalid status value")
+    })
     public LoadResponse update(@PathVariable UUID id, @Valid @RequestBody UpdateLoadRequest request) {
         Load load = findOrThrow(id);
         if (request.status() != null) {
