@@ -76,6 +76,12 @@ the row says so rather than carrying a placeholder.
 | T-63 | The filter chain keeps `/health`, `/`, `/auth/register` and `/auth/login` public while rejecting an unauthenticated request to any other path with 401 (4 tests) | backend | Public routes 200/400; unlisted route 401 with the documented shape | As expected | ✅ Pass | #9 |
 | T-64 | **`GET /audit` allows an Admin token, rejects a non-Admin token with 403, and rejects a missing token with 401** (issue #9 Minimum Integration Test, 3 tests) | backend | 200 for Admin; 403 `ACCESS_DENIED` for a Transporter; 401 `UNAUTHENTICATED` for no token | As expected | ✅ Pass | #9 |
 | T-65 | The generated OpenAPI description lists `/auth/register`, `/auth/login` and `/audit` and declares the `bearerAuth` scheme; Swagger UI's page loads, both without a token (2 tests) | backend | 200 for `/v3/api-docs` and `/swagger-ui/index.html`; `components.securitySchemes.bearerAuth.scheme` is `bearer` | As expected | ✅ Pass | #9 |
+| T-66 | **Both parties submit ratings for a completed match and retrieve them** (issue #16 Minimum Integration Test) | backend (web) | POST /matches/{id}/ratings with rater/ratee IDs and score 1-5; GET /matches/{id}/ratings returns all submitted ratings | As expected | ✅ Pass | #16 |
+| T-67 | `GET /users/{userId}/ratings` returns all ratings received by that user | backend (web) | Query user as ratee, fetch ratings where rateeId=userId, verify scores and comments persist | As expected | ✅ Pass | #16 |
+| T-68 | `POST /matches/{id}/disputes` creates a dispute with description, status defaults to OPEN | backend (web) | 201 with full dispute; status, resolutionNote, resolvedBy are null initially | As expected | ✅ Pass | #16 |
+| T-69 | `GET /disputes` returns only OPEN disputes for the admin queue | backend (web) | Filter applies; closed disputes excluded; dispute list queryable by status | As expected | ✅ Pass | #16 |
+| T-70 | `GET /disputes/{id}` fetches a single dispute and returns 404 for unknown ID | backend (web) | Fetch by ID returns full dispute; invalid UUID returns 404 with error message | As expected | ✅ Pass | #16 |
+| T-71 | Creating a dispute writes an `audit_logs` row with action=DISPUTE_RAISED | backend (web) | POST /disputes triggers insert into audit_logs with actorId=raisedBy, action="DISPUTE_RAISED", entityType="dispute" | As expected | ✅ Pass | #16 |
 
 ### Evidence for T-19–T-22
 
@@ -290,7 +296,7 @@ executable lines a test run touched at least once.
 
 | Service | Tool | Line coverage | Gate | Status |
 |---|---|---|---|---|
-| backend | JaCoCo 0.8.12 | **97.9%** (693/708 lines) | 80% | ✅ Pass |
+| backend | JaCoCo 0.8.12 | **94.6%** (721/762 lines) | 80% | ✅ Pass |
 | matching-service | pytest-cov | **100%** (165/165 lines) | 80% | ✅ Pass |
 
 Reports are uploaded as CI artifacts (`coverage-backend`, `coverage-matching-service`)
