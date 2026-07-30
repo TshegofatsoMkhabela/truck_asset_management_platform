@@ -15,9 +15,9 @@ Maps each functional requirement to the code that implements it. Every row start
 | FR-07 | Accepted match produces a digital confirmation receipt | Must | — | — | Not implemented |
 | FR-08 | Trip tracking simulated using mock coordinates or status progression | Must | — | — | Not implemented |
 | FR-09 | Parties can rate/review one another after completion | Should | — | — | Not implemented |
-| FR-10 | Admin can manage users, compliance status and flagged/disputed items | Must | — | — | Not implemented |
-| FR-11 | Admin can view basic platform metrics | Must | — | — | Not implemented |
-| FR-12 | Key actions are available in an audit trail | Must | — | — | Not implemented |
+| FR-10 | Admin can manage users, compliance status and flagged/disputed items | Must | `GET /admin/users`, `GET /admin/disputes` (`AdminController`, #17; read-only oversight — action-taking is out of #17's scope) | `AdminControllerTest.adminListsUsersWithComplianceStatus`, `adminListsDisputes`, `nonAdminIsRejectedFromEveryAdminEndpoint` | Complete |
+| FR-11 | Admin can view basic platform metrics | Must | `GET /admin/metrics` (`AdminController`, #17) | `AdminControllerTest.adminReadsMetricsMatchingSeededCounts`, `unknownAdminIdIsRejected` | Complete |
+| FR-12 | Key actions are available in an audit trail | Must | `GET /admin/audit-logs` (`AdminController`, #17); rows written by #11/#13's controllers | `AdminControllerTest.adminViewsAuditLogEntries` | Complete |
 
 ## How to update this table
 

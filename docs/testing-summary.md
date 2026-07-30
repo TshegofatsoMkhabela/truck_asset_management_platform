@@ -53,6 +53,11 @@ the row says so rather than carrying a placeholder.
 | T-40 | `GET /loads/{id}` with unknown ID returns 404 | backend (web) | Random UUID in path returns 404 with error message | As expected | ✅ Pass | #11 |
 | T-41 | Creating a load writes an `audit_logs` row with action=LOAD_POSTED | backend (web) | POST /loads triggers insert into audit_logs with actorId=ownerId, action="LOAD_POSTED", entityType="load" | As expected | ✅ Pass | #11 |
 | T-42 | `POST /loads` rejects invalid cargo type, non-positive weight/volume, blank cities | backend (web) | DTO validation (Jakarta Bean Validation) rejects GENERAL+INVALID, weightKg=0, blank originCity (HTTP 400) | As expected | ✅ Pass | #11 |
+| T-48 | **Admin reads `/admin/metrics` and the counts cover the rows seeded in the test; a non-admin is rejected from the same endpoint** (issue #17 Minimum Integration Test, with T-49) | backend (web) | 200 with `users`/`loads`/`trucks`/`matches` counts at least covering the seeded rows | As expected | ✅ Pass | #17 |
+| T-49 | Every `/admin/*` endpoint refuses a TRANSPORTER's id | backend (web) | 403 on metrics, users, audit-logs and disputes | As expected | ✅ Pass | #17 |
+| T-50 | An unknown `adminId` gets the same 403 as a non-admin (no user-enumeration hint) | backend (web) | 403, indistinguishable from the non-admin case | As expected | ✅ Pass | #17 |
+| T-51 | `GET /admin/users` lists users with role and compliance status | backend (web) | Seeded FREIGHT_OWNER shows `complianceStatus: PENDING`; the admin shows `role: ADMIN` | As expected | ✅ Pass | #17 |
+| T-52 | `GET /admin/audit-logs` returns the audit trail; `GET /admin/disputes` returns a seeded dispute with its OPEN status | backend (web) | Audit listing is a well-formed array; the seeded dispute appears with description and status | As expected | ✅ Pass | #17 |
 
 ### Evidence for T-19–T-22
 
