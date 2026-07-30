@@ -8,7 +8,7 @@ import jakarta.validation.constraints.Pattern;
 import java.math.BigDecimal;
 
 /**
- * One mock tracking update for an accepted match (FR-08, issue #15).
+ * One mock tracking update for an accepted match.
  *
  * <p>Mirrors the schema's {@code tracking_events_position_or_status_check}: an event must
  * carry a status, a full coordinate pair, or both. Validating it here returns a clean 400

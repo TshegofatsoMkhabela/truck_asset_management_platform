@@ -5,7 +5,7 @@ import java.util.Map;
 import java.util.UUID;
 import za.co.ice.tamp.backend.persistence.entity.AuditLog;
 
-/** One audit trail entry as returned to an admin (FR-12, issue #17). */
+/** One audit trail entry as returned to an admin. */
 public record AuditLogResponse(
         UUID id,
         UUID actorId,

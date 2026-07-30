@@ -7,6 +7,6 @@ import za.co.ice.tamp.backend.persistence.entity.Dispute;
 
 public interface DisputeRepository extends JpaRepository<Dispute, UUID> {
 
-    /** Backs FR-10: the admin console's open-disputes queue. */
+    /** Backs the admin console's open-disputes queue. */
     List<Dispute> findByStatus(String status);
 }

@@ -23,7 +23,7 @@ import za.co.ice.tamp.backend.persistence.repository.TruckRepository;
 
 /**
  * Fetches a load and its candidate trucks, asks matching-service for eligible
- * matches, persists the results, and writes the audit event FR-12 requires.
+ * matches, persists the results, and writes the audit event.
  *
  * <p>Kept separate from the HTTP controller: this exact sequence is what the
  * 2-second timing test measures in isolation from HTTP serialisation overhead,

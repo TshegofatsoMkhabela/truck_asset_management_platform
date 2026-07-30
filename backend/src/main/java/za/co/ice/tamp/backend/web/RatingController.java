@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -18,6 +19,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import za.co.ice.tamp.backend.persistence.entity.Rating;
 import za.co.ice.tamp.backend.persistence.repository.RatingRepository;
+import za.co.ice.tamp.backend.security.CurrentUser;
 import za.co.ice.tamp.backend.web.dto.RatingRequest;
 import za.co.ice.tamp.backend.web.dto.RatingResponse;
 
@@ -33,7 +35,8 @@ public class RatingController {
     @PostMapping("/matches/{matchId}/ratings")
     @Operation(summary = "Submit a rating for a completed match",
             description = "Freight owner or transporter rates the other party after a trip. "
-                    + "Temporarily requires raterId and rateeId as query params until #9 auth merges.")
+                    + "raterId and rateeId are caller-supplied query params rather than read from "
+                    + "an authenticated identity; see known-limitations.md.")
     @ApiResponses({
         @ApiResponse(responseCode = "201", description = "Rating created",
                 content = @Content(schema = @Schema(implementation = RatingResponse.class))),
@@ -42,10 +45,13 @@ public class RatingController {
     })
     public ResponseEntity<RatingResponse> submitRating(
             @PathVariable UUID matchId,
-            @RequestParam UUID raterId,
+            @RequestParam(required = false) UUID raterId,
             @RequestParam UUID rateeId,
-            @Valid @RequestBody RatingRequest request) {
-        Rating rating = new Rating(matchId, raterId, rateeId, request.score(), request.comment());
+            @Valid @RequestBody RatingRequest request,
+            Authentication authentication) {
+        Rating rating = new Rating(matchId,
+                CurrentUser.requireIdOrFallback(authentication, raterId, "raterId"),
+                rateeId, request.score(), request.comment());
         Rating saved = ratingRepository.save(rating);
         return ResponseEntity.status(HttpStatus.CREATED).body(RatingResponse.from(saved));
     }

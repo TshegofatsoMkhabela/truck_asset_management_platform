@@ -28,16 +28,15 @@ import za.co.ice.tamp.backend.web.dto.CreateTrackingEventRequest;
 import za.co.ice.tamp.backend.web.dto.TrackingEventResponse;
 
 /**
- * Mock trip tracking for an accepted match (FR-08, issue #15).
+ * Mock trip tracking for an accepted match.
  *
  * <p>Talks directly to the repositories with no intervening service class, matching #11's
  * precedent for plain CRUD with a not-found check. Coordinates and statuses are synthetic:
  * the brief excludes live GPS/telematics, so "tracking" means appending mock events and
  * reading them back oldest-first.
  *
- * <p>Deliberately unauthenticated: #9 (RBAC, role-based access control, and auth) owns role
- * enforcement and has not merged yet; the intended role is documented in the OpenAPI
- * summaries as temporary, replaced once #9 lands.
+ * <p>Deliberately unauthenticated: #9 (RBAC, role-based access control, and auth) built login
+ * and JWT issuance but never wired role checks into this controller; see known-limitations.md.
  */
 @RestController
 public class TrackingController {
@@ -60,7 +59,7 @@ public class TrackingController {
     @Operation(summary = "Record a mock tracking update for an accepted match",
             description = "Appends a synthetic status and/or coordinate event to the match's trip "
                     + "history. Only ACCEPTED matches can be tracked: a PROPOSED or REJECTED match "
-                    + "has no trip. Intended role: TRANSPORTER (unenforced until #9 auth/RBAC merges).")
+                    + "has no trip. Intended role: TRANSPORTER (unenforced, see known-limitations.md).")
     @ApiResponses({
         @ApiResponse(responseCode = "201", description = "Event recorded",
                 content = @Content(schema = @Schema(implementation = TrackingEventResponse.class))),
@@ -92,7 +91,7 @@ public class TrackingController {
     @GetMapping("/matches/{matchId}/tracking")
     @Operation(summary = "Fetch a match's tracking history, oldest event first",
             description = "Returns every recorded mock trip event for the match. Intended role: "
-                    + "any authenticated party to the match (unenforced until #9 auth/RBAC merges).")
+                    + "any authenticated party to the match (unenforced, see known-limitations.md).")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "Events retrieved (may be empty)"),
         @ApiResponse(responseCode = "404", description = "Match not found")

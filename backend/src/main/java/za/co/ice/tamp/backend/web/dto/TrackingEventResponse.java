@@ -5,7 +5,7 @@ import java.time.OffsetDateTime;
 import java.util.UUID;
 import za.co.ice.tamp.backend.persistence.entity.TrackingEvent;
 
-/** A stored tracking event as returned by the API (FR-08, issue #15). */
+/** A stored tracking event as returned by the API. */
 public record TrackingEventResponse(
         UUID id,
         UUID matchId,

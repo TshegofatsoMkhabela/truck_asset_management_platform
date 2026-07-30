@@ -7,6 +7,6 @@ import za.co.ice.tamp.backend.persistence.entity.ComplianceDocument;
 
 public interface ComplianceDocumentRepository extends JpaRepository<ComplianceDocument, UUID> {
 
-    /** Backs FR-02/FR-10: an admin reviewing one user's paperwork. */
+    /** Backs an admin reviewing one user's paperwork. */
     List<ComplianceDocument> findByUserId(UUID userId);
 }

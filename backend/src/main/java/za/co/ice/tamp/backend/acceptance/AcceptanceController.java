@@ -12,14 +12,17 @@ import java.util.UUID;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RestController;
+import za.co.ice.tamp.backend.security.CurrentUser;
+import za.co.ice.tamp.backend.web.MatchNotFoundException;
 
 /**
- * FR-06: accept or reject a proposed match.
+ * Accepts or rejects a proposed match.
  *
  * <p>No role annotation and no shared error-response reference yet: both depend on #9
  * (auth/RBAC), which has not merged. Same deliberate, recorded gap as {@code MatchController},
@@ -35,9 +38,9 @@ public class AcceptanceController {
     }
 
     @Operation(
-            summary = "Accept or reject a proposed match (FR-06)",
+            summary = "Accept or reject a proposed match",
             description = "Persists the decision with its actor and timestamp, and records an "
-                    + "audit event. Accepting also issues the receipt FR-07 requires.",
+                    + "audit event. Accepting also issues the receipt.",
             requestBody = @RequestBody(content = @Content(examples = @ExampleObject(
                     name = "Accept, as the seeded demo owner (#7)",
                     value = "{\"decision\": \"ACCEPTED\", "
@@ -52,17 +55,18 @@ public class AcceptanceController {
     public DecisionResponse decide(
             @PathVariable UUID matchId,
             @Valid @org.springframework.web.bind.annotation.RequestBody DecisionRequest request,
-            HttpServletRequest httpRequest) {
+            HttpServletRequest httpRequest,
+            Authentication authentication) {
         return DecisionResponse.from(coordinator.decide(
                 matchId,
                 request.decision(),
-                request.actorId(),
+                CurrentUser.requireIdOrFallback(authentication, request.actorId(), "actorId"),
                 httpRequest.getRemoteAddr(),
                 httpRequest.getHeader("User-Agent")));
     }
 
     @Operation(
-            summary = "Fetch the receipt issued for an accepted match (FR-07)",
+            summary = "Fetch the receipt issued for an accepted match",
             description = "Returns the digital confirmation, including the human-readable "
                     + "contract ID the parties quote. A rejected or still-proposed match has "
                     + "no receipt, which is a 404 rather than an empty body.")
@@ -76,10 +80,10 @@ public class AcceptanceController {
     }
 
     /**
-     * Controller-scoped, and temporary for the same reason #10's are: #9 owns the single
-     * global error shape every endpoint should share. These exist so #14 can be demoed and
-     * Swagger-tested today, and are deleted rather than merged around once #9's
-     * {@code @ControllerAdvice} lands.
+     * Controller-scoped rather than folded into the shared {@code GlobalExceptionHandler}
+     * (#9's {@code @ControllerAdvice}, which has since landed). Left as-is since consolidating
+     * it is a mechanical cleanup with no behaviour change, not urgent enough to bundle into an
+     * unrelated issue.
      */
     @ExceptionHandler(MatchNotFoundException.class)
     public ResponseEntity<String> handleNotFound(MatchNotFoundException ex) {
