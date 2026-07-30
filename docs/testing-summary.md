@@ -47,15 +47,21 @@ the row says so rather than carrying a placeholder.
 | T-34 | `MatchingServiceClient.requestMatches(...)` sends snake_case field names matching-service expects and parses the response | backend | Request body contains `origin_city`, `weight_kg`, `vehicle_type`; response parses to `truckId`, `score`, `reasons` | As expected | ✅ Pass | #13 |
 | T-35 | `MatchingCoordinator` fetches the load and available trucks, persists every eligible match, and writes an audit event naming the actor, the load, and the match count, including when zero trucks are eligible | backend | 1 match persisted and 1 audit event with `matchCount: 1`; on the zero-match path, 0 matches persisted and 1 audit event with `matchCount: 0` | As expected | ✅ Pass | #13 |
 | T-36 | **Real HTTP call from the orchestrator to matching-service returns the correct match within 2 seconds on #7's seeded data** (replaces T-05–T-07's dummy round trip; issue #13's required performance evidence) | both (e2e) | The seeded open load matches exactly the one eligible seeded truck, with real reasons, in under 2000ms | 706ms, eligible truck found | ✅ Pass | #13 |
-| T-37 | `GlobalExceptionHandler` maps a validation failure, an authentication failure and an access-denial to the documented `ApiError` shape with the correct status (3 tests) | backend | 400/401/403 with `status`, `error`, `message`, `fieldErrors` populated as appropriate | As expected | ✅ Pass | #9 |
-| T-38 | `AuditService.record` writes an `AuditLog` with the actor, action, entity type/id and details it was given | backend | Saved entity's fields match the call arguments exactly | As expected | ✅ Pass | #9 |
-| T-39 | `POST /auth/register` hashes the password (never stores or returns it), writes a `REGISTERED` audit event, rejects a blank field with the documented validation shape, and rejects a duplicate email with 409 (4 tests) | backend | Stored hash starts with `$2` (BCrypt) and differs from the raw password; exactly one audit row; 400 with `fieldErrors.fullName` on a blank name; 409 `EMAIL_ALREADY_REGISTERED` on a repeat email | As expected | ✅ Pass | #9 |
-| T-40 | `JwtService` issues a token that parses back to the same user id and role via both the individual accessors and the combined `parseToken`, and rejects a token signed with a different key (3 tests) | backend | Round-trip matches; cross-key token throws `SignatureException` | As expected | ✅ Pass | #9 |
-| T-41 | `POST /auth/login` returns a token and the user for valid credentials, returns the documented 401 shape for a wrong password and for an unknown email with the same body, and writes a `LOGGED_IN` audit event (4 tests) | backend | 200 with `token`/`user`; 401 `UNAUTHENTICATED` for a wrong password and for an unknown email, both with identical body; one `LOGGED_IN` row after login | As expected | ✅ Pass | #9 |
-| T-42 | `JwtAuthenticationFilter` authenticates a request carrying a valid bearer token, leaves the security context empty for a missing, malformed, or JWT-rejected header, and propagates (rather than swallows) an unrelated `RuntimeException` from `JwtService` (5 tests) | backend | Context holds the token's user id and `ROLE_<role>` only for a genuinely valid bearer token; a non-JWT exception is not caught | As expected | ✅ Pass | #9 |
-| T-43 | The filter chain keeps `/health`, `/`, `/auth/register` and `/auth/login` public while rejecting an unauthenticated request to any other path with 401 (4 tests) | backend | Public routes 200/400; unlisted route 401 with the documented shape | As expected | ✅ Pass | #9 |
-| T-44 | **`GET /audit` allows an Admin token, rejects a non-Admin token with 403, and rejects a missing token with 401** (issue #9 Minimum Integration Test, 3 tests) | backend | 200 for Admin; 403 `ACCESS_DENIED` for a Transporter; 401 `UNAUTHENTICATED` for no token | As expected | ✅ Pass | #9 |
-| T-45 | The generated OpenAPI description lists `/auth/register`, `/auth/login` and `/audit` and declares the `bearerAuth` scheme; Swagger UI's page loads, both without a token (2 tests) | backend | 200 for `/v3/api-docs` and `/swagger-ui/index.html`; `components.securitySchemes.bearerAuth.scheme` is `bearer` | As expected | ✅ Pass | #9 |
+| T-37 | **Freight owner creates a load and retrieves the owner's complete list** (issue #11 Minimum Integration Test) | backend (web) | POST /loads returns 201 with full response; GET /loads?ownerId=X returns list containing the created load | As expected | ✅ Pass | #11 |
+| T-38 | `GET /loads/{id}` fetches a single load by ID | backend (web) | Fetch a created load by its ID, verify status (OPEN), origin, destination, weight in response | As expected | ✅ Pass | #11 |
+| T-39 | `PATCH /loads/{id}` updates load status only, without requiring re-entry of fields | backend (web) | Update status to MATCHED without sending originCity/destination; response includes original fields unchanged | As expected | ✅ Pass | #11 |
+| T-40 | `GET /loads/{id}` with unknown ID returns 404 | backend (web) | Random UUID in path returns 404 with error message | As expected | ✅ Pass | #11 |
+| T-41 | Creating a load writes an `audit_logs` row with action=LOAD_POSTED | backend (web) | POST /loads triggers insert into audit_logs with actorId=ownerId, action="LOAD_POSTED", entityType="load" | As expected | ✅ Pass | #11 |
+| T-42 | `POST /loads` rejects invalid cargo type, non-positive weight/volume, blank cities | backend (web) | DTO validation (Jakarta Bean Validation) rejects GENERAL+INVALID, weightKg=0, blank originCity (HTTP 400) | As expected | ✅ Pass | #11 |
+| T-43 | `GlobalExceptionHandler` maps a validation failure, an authentication failure and an access-denial to the documented `ApiError` shape with the correct status (3 tests) | backend | 400/401/403 with `status`, `error`, `message`, `fieldErrors` populated as appropriate | As expected | ✅ Pass | #9 |
+| T-44 | `AuditService.record` writes an `AuditLog` with the actor, action, entity type/id and details it was given | backend | Saved entity's fields match the call arguments exactly | As expected | ✅ Pass | #9 |
+| T-45 | `POST /auth/register` hashes the password (never stores or returns it), writes a `REGISTERED` audit event, rejects a blank field with the documented validation shape, and rejects a duplicate email with 409 (4 tests) | backend | Stored hash starts with `$2` (BCrypt) and differs from the raw password; exactly one audit row; 400 with `fieldErrors.fullName` on a blank name; 409 `EMAIL_ALREADY_REGISTERED` on a repeat email | As expected | ✅ Pass | #9 |
+| T-46 | `JwtService` issues a token that parses back to the same user id and role via both the individual accessors and the combined `parseToken`, and rejects a token signed with a different key (3 tests) | backend | Round-trip matches; cross-key token throws `SignatureException` | As expected | ✅ Pass | #9 |
+| T-47 | `POST /auth/login` returns a token and the user for valid credentials, returns the documented 401 shape for a wrong password and for an unknown email with the same body, and writes a `LOGGED_IN` audit event (4 tests) | backend | 200 with `token`/`user`; 401 `UNAUTHENTICATED` for a wrong password and for an unknown email, both with identical body; one `LOGGED_IN` row after login | As expected | ✅ Pass | #9 |
+| T-48 | `JwtAuthenticationFilter` authenticates a request carrying a valid bearer token, leaves the security context empty for a missing, malformed, or JWT-rejected header, and propagates (rather than swallows) an unrelated `RuntimeException` from `JwtService` (5 tests) | backend | Context holds the token's user id and `ROLE_<role>` only for a genuinely valid bearer token; a non-JWT exception is not caught | As expected | ✅ Pass | #9 |
+| T-49 | The filter chain keeps `/health`, `/`, `/auth/register` and `/auth/login` public while rejecting an unauthenticated request to any other path with 401 (4 tests) | backend | Public routes 200/400; unlisted route 401 with the documented shape | As expected | ✅ Pass | #9 |
+| T-50 | **`GET /audit` allows an Admin token, rejects a non-Admin token with 403, and rejects a missing token with 401** (issue #9 Minimum Integration Test, 3 tests) | backend | 200 for Admin; 403 `ACCESS_DENIED` for a Transporter; 401 `UNAUTHENTICATED` for no token | As expected | ✅ Pass | #9 |
+| T-51 | The generated OpenAPI description lists `/auth/register`, `/auth/login` and `/audit` and declares the `bearerAuth` scheme; Swagger UI's page loads, both without a token (2 tests) | backend | 200 for `/v3/api-docs` and `/swagger-ui/index.html`; `components.securitySchemes.bearerAuth.scheme` is `bearer` | As expected | ✅ Pass | #9 |
 
 ### Evidence for T-19–T-22
 
@@ -222,7 +228,7 @@ executable lines a test run touched at least once.
 
 | Service | Tool | Line coverage | Gate | Status |
 |---|---|---|---|---|
-| backend | JaCoCo 0.8.12 | **94%** (1617/1717 instructions) | 80% | ✅ Pass |
+| backend | JaCoCo 0.8.12 | **96%** (2135/2221 instructions) | 80% | ✅ Pass |
 | matching-service | pytest-cov | **100%** (165/165 lines) | 80% | ✅ Pass |
 
 Reports are uploaded as CI artifacts (`coverage-backend`, `coverage-matching-service`)
@@ -243,11 +249,11 @@ The backend figure was recorded as 100% (4/4 lines) when #2 landed, then 95% (19
 #6's schema tests were measured against the merged state of #2/#4/#5, then 93.5% (200/214)
 once #6 grew to include the JPA persistence layer. It reached 92.6% (249/269) once #13 added
 the matching coordinator, controller and DTOs and removed `IntegrationController`, then
-91.2% (936/1026) once #10's user/profile work and #8's Dockerfiles landed in the same tree.
-It is now **94% (1617/1717 instructions)**, remeasured after merging #9's auth, RBAC, audit
-trail and OpenAPI documentation code (registration, login, the JWT filter, and the two
-Security-layer error handlers) into that same tree. All figures here are taken from the
-JaCoCo CSV directly, not estimated.
+91.2% (936/1026) once #10's user/profile work and #8's Dockerfiles landed in the same tree,
+then 94% (1617/1717 instructions) once #9's auth, RBAC, audit trail and OpenAPI documentation
+code merged in alongside. It is now **96% (2135/2221 instructions)**, remeasured after merging
+#11's load postings and #12's trucks endpoint into that same tree. All figures here are taken
+from the JaCoCo CSV directly, not estimated.
 
 ## Known defects
 
