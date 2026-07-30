@@ -47,6 +47,12 @@ the row says so rather than carrying a placeholder.
 | T-34 | `MatchingServiceClient.requestMatches(...)` sends snake_case field names matching-service expects and parses the response | backend | Request body contains `origin_city`, `weight_kg`, `vehicle_type`; response parses to `truckId`, `score`, `reasons` | As expected | ✅ Pass | #13 |
 | T-35 | `MatchingCoordinator` fetches the load and available trucks, persists every eligible match, and writes an audit event naming the actor, the load, and the match count, including when zero trucks are eligible | backend | 1 match persisted and 1 audit event with `matchCount: 1`; on the zero-match path, 0 matches persisted and 1 audit event with `matchCount: 0` | As expected | ✅ Pass | #13 |
 | T-36 | **Real HTTP call from the orchestrator to matching-service returns the correct match within 2 seconds on #7's seeded data** (replaces T-05–T-07's dummy round trip; issue #13's required performance evidence) | both (e2e) | The seeded open load matches exactly the one eligible seeded truck, with real reasons, in under 2000ms | 706ms, eligible truck found | ✅ Pass | #13 |
+| T-37 | **Freight owner creates a load and retrieves the owner's complete list** (issue #11 Minimum Integration Test) | backend (web) | POST /loads returns 201 with full response; GET /loads?ownerId=X returns list containing the created load | As expected | ✅ Pass | #11 |
+| T-38 | `GET /loads/{id}` fetches a single load by ID | backend (web) | Fetch a created load by its ID, verify status (OPEN), origin, destination, weight in response | As expected | ✅ Pass | #11 |
+| T-39 | `PATCH /loads/{id}` updates load status only, without requiring re-entry of fields | backend (web) | Update status to MATCHED without sending originCity/destination; response includes original fields unchanged | As expected | ✅ Pass | #11 |
+| T-40 | `GET /loads/{id}` with unknown ID returns 404 | backend (web) | Random UUID in path returns 404 with error message | As expected | ✅ Pass | #11 |
+| T-41 | Creating a load writes an `audit_logs` row with action=LOAD_POSTED | backend (web) | POST /loads triggers insert into audit_logs with actorId=ownerId, action="LOAD_POSTED", entityType="load" | As expected | ✅ Pass | #11 |
+| T-42 | `POST /loads` rejects invalid cargo type, non-positive weight/volume, blank cities | backend (web) | DTO validation (Jakarta Bean Validation) rejects GENERAL+INVALID, weightKg=0, blank originCity (HTTP 400) | As expected | ✅ Pass | #11 |
 
 ### Evidence for T-19–T-22
 
@@ -213,7 +219,7 @@ executable lines a test run touched at least once.
 
 | Service | Tool | Line coverage | Gate | Status |
 |---|---|---|---|---|
-| backend | JaCoCo 0.8.12 | **91.2%** (936/1026 lines) | 80% | ✅ Pass |
+| backend | JaCoCo 0.8.12 | **91.1%** (936/1026 lines) | 80% | ✅ Pass |
 | matching-service | pytest-cov | **100%** (165/165 lines) | 80% | ✅ Pass |
 
 Reports are uploaded as CI artifacts (`coverage-backend`, `coverage-matching-service`)
