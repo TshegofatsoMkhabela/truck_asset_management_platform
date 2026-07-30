@@ -31,6 +31,43 @@
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
 
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+
+        <!-- RBAC, password hashing (BCryptPasswordEncoder) and the stateless JWT filter chain
+             for #9. A vetted library rather than hand-rolled auth, per the issue's own reasoning. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- jjwt: issues and verifies the signed JWT (JSON Web Token) returned on login. -->
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-api</artifactId>
+            <version>0.12.6</version>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-impl</artifactId>
+            <version>0.12.6</version>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-jackson</artifactId>
+            <version>0.12.6</version>
+            <scope>runtime</scope>
+        </dependency>
+
         <!-- Feature code reads and writes through entities and repositories, never SQL
              strings. The schema itself stays owned by db/migrations (#6); ddl-auto is set
              to validate, not update or create, so Hibernate checks the mapping against that
@@ -38,21 +75,6 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-jpa</artifactId>
-        </dependency>
-
-        <!-- Enables @Valid / Jakarta Bean Validation annotations (@NotBlank, @Email, @Pattern) on
-             request DTOs, so malformed input is rejected before it reaches the database. -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-validation</artifactId>
-        </dependency>
-
-        <!-- Just the hashing library (BCryptPasswordEncoder), not spring-boot-starter-security:
-             the full starter auto-configures a login filter chain and default-denies every
-             endpoint, which is #9's (RBAC and auth) job to build, not this issue's. -->
-        <dependency>
-            <groupId>org.springframework.security</groupId>
-            <artifactId>spring-security-crypto</artifactId>
         </dependency>
 
         <dependency>
@@ -79,11 +101,11 @@
         <!-- Brief section 7 lists an OpenAPI file as a required submission artifact, and
              section 2.2 names Swagger/OpenAPI as the back-end demonstration vehicle; every
              feature issue from #10 onward also carries its own OpenAPI acceptance criterion.
-             Both #10 and #13 independently added this dependency for that reason, discovered
-             as a merge conflict rather than planned; kept here as one copy on #10's version,
-             since #10 merged to main first and #13's own dependency was already satisfying
-             the same need. Auto-exposes /swagger-ui.html and /v3/api-docs with zero
-             configuration beyond this dependency. -->
+             #10, #13 and #9 each independently added this dependency for that reason,
+             discovered as a merge conflict rather than planned; kept here as one copy,
+             covering #9's JWT bearer security scheme alongside #10's and #13's needs.
+             Auto-exposes /swagger-ui.html and /v3/api-docs with zero configuration beyond
+             this dependency. -->
         <dependency>
             <groupId>org.springdoc</groupId>
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>

@@ -83,12 +83,12 @@ public class User {
         return email;
     }
 
-    public String getRole() {
-        return role;
-    }
-
     public String getPasswordHash() {
         return passwordHash;
+    }
+
+    public String getRole() {
+        return role;
     }
 
     public String getComplianceStatus() {

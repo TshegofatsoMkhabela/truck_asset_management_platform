@@ -1,0 +1,21 @@
+# CodeQL configuration. The workflow fails on ANY finding left in the SARIF
+# (see codeql.yml), so a query can only be excluded here, in the repository,
+# where the exclusion and its reasoning are reviewable — never by quietly
+# dismissing an alert in the UI, which the SARIF gate would not honour anyway.
+#
+# Every exclusion below must name the query and justify it.
+
+query-filters:
+  # java/spring-disabled-csrf-protection flags SecurityConfig's csrf.disable().
+  # False positive for this architecture: CSRF forgery works by the browser
+  # automatically attaching session cookies to a cross-site request, and this
+  # API has no sessions and no auth cookies (SessionCreationPolicy.STATELESS).
+  # The only credential is a JWT sent as an explicit Authorization header,
+  # which a cross-site attacker's forged request cannot set. Enabling CSRF
+  # would 403 every legitimate non-browser client (curl, Swagger UI, the
+  # frontend) while defending against an attack that cannot occur. Spring
+  # Security's own documentation recommends disabling CSRF for exactly this
+  # kind of service. Full reasoning: docs/adr/0003-authentication-and-rbac.md.
+  # Revisit if cookie- or session-based authentication is ever introduced.
+  - exclude:
+      id: java/spring-disabled-csrf-protection
