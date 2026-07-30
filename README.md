@@ -45,6 +45,13 @@ Interactive API documentation:
 placeholders only, per the brief's "controlled configuration, no secrets committed" line
 (section 4).
 
+**If `docker compose up` fails with "port is already allocated" on 8080 or 8000** (another
+project's container, or a stack from an earlier run of this one, already holds it): unlike the
+database port below, the backend and matching-service host ports are not parameterised by an
+environment variable today, they are hardcoded as `8080:8080` and `8000:8000` in
+`docker-compose.yml`. Either stop whatever already holds the port (`docker ps`, then
+`docker stop <name>`), or edit those two `ports:` lines directly for a one-off local run.
+
 ### Local database only (Docker), services run natively
 
 Useful for active development on the backend or matching-service, where you want fast
@@ -205,6 +212,12 @@ The load and the expected matching truck are both from #7's seed data. The respo
 `matching-service`, not `backend`: that is the point, it proves the orchestrator really
 made the hop rather than answering for itself.
 
+**Running this a second time against the same load will 409, not repeat the match above.**
+`matches_load_truck_unique` rejects a duplicate proposal for a pair that's already matched, so
+retrying this exact command, or reusing a Docker volume from an earlier run, returns
+`{"status":409,"error":"DATA_CONFLICT",...}` instead of the JSON shown above. Post a fresh load
+(`POST /loads`) to get a match response on a clean pair.
+
 The target is configured by `MATCHING_SERVICE_URL` (default `http://localhost:8000`), so
 Docker Compose (#8) repoints it at the container hostname `matching-service` with no code
 change; see `docker-compose.yml`'s `backend` service.
@@ -213,8 +226,14 @@ change; see `docker-compose.yml`'s `backend` service.
 MATCHING_SERVICE_URL=http://localhost:8010 mvn spring-boot:run
 ```
 
-No role restriction yet: `requestedBy` stands in for an authenticated caller until #9
-lands. See [Known Limitations](docs/known-limitations.md).
+`requestedBy` is a caller-supplied fallback, not a hardcoded gap: #9 (auth/RBAC) has merged,
+and `CurrentUser` (`backend/src/main/java/za/co/ice/tamp/backend/security/CurrentUser.java`)
+now overrides it with the id from a real `Authorization: Bearer` token whenever one is
+present, so a Swagger UI session that has logged in doesn't need the same id retyped into every
+request. What #9 did **not** do is require that token: an unauthenticated request with no
+header still gets through using whatever id the body supplies, exactly as before. See
+[Known Limitations](docs/known-limitations.md) for why authentication was built without being
+enforced.
 
 This replaced #5's dummy `/integration/ping` round trip, which existed only to prove the
 network hop worked before there was any real logic behind it. See
@@ -274,9 +293,9 @@ curl http://localhost:8080/matches/$MATCH/tracking
 Events come back oldest first, so the response reads as a journey. Coordinates are synthetic
 and no live GPS source exists or is planned; see [Known Limitations](docs/known-limitations.md).
 
-The tracking endpoints ship from #15; acceptance and receipts from #14. None of them restrict
-by role yet: `actorId` stands in for an authenticated caller until #9 lands, exactly as
-`requestedBy` does on the matching endpoint.
+The tracking endpoints ship from #15; acceptance and receipts from #14. None of them require a
+role yet: `actorId` is the same `CurrentUser`-backed fallback described above, a real JWT
+overrides it when one is presented, but nothing rejects a request that omits one.
 
 ## Documentation
 
