@@ -15,9 +15,9 @@ the row says so rather than carrying a placeholder.
 | T-02 | `GET /health` returns 200 with `status: UP` and `service: matching-service` | matching-service | 200, `{"status":"UP","service":"matching-service"}` | As expected | ✅ Pass | #2 |
 | T-03 | `GET /` returns the service greeting (context loads and routes) | backend | 200, `service: backend`, `status: ok` | As expected | ✅ Pass | #1 |
 | T-04 | `GET /` returns the service greeting (ASGI app assembles and routes) | matching-service | 200, `service: matching-service`, `status: ok` | As expected | ✅ Pass | #1 |
-| T-05 | ~~`GET /ping` returns the fixed cross-service target payload~~ | matching-service | n/a | Removed (#13): `/ping` and its caller (`IntegrationController`) existed only as a target for T-07's dummy round trip, superseded by real matching (see T-27) | ➖ Superseded | #5 |
+| T-05 | ~~`GET /ping` returns the fixed cross-service target payload~~ | matching-service | n/a | Removed (#13): `/ping` and its caller (`IntegrationController`) existed only as a target for T-07's dummy round trip, superseded by real matching (see T-36) | ➖ Superseded | #5 |
 | T-06 | ~~The client calls `GET {base}/ping` with the right verb and parses the response~~ | backend | n/a | Removed (#13): `MatchingServiceClient.ping()` was replaced by `requestMatches(...)`, see T-25 | ➖ Superseded | #5 |
-| T-07 | ~~Orchestrator reaches matching-service over a real network call~~ | both (e2e) | n/a | Removed (#13): superseded by T-28, the real matching round trip against #7's seeded data | ➖ Superseded | #5 |
+| T-07 | ~~Orchestrator reaches matching-service over a real network call~~ | both (e2e) | n/a | Removed (#13): superseded by T-36, the real matching round trip against #7's seeded data | ➖ Superseded | #5 |
 | T-08 | All 11 migrations apply in order to an empty PostgreSQL 18 database | backend (db) | Every table created, no error | As expected | ✅ Pass | #6 |
 | T-09 | `users` constraints: case-insensitive unique email, role and compliance CHECKs, blank name, time-ordered UUID keys (6 tests) | backend (db) | Each invalid write rejected by its named constraint | As expected | ✅ Pass | #6 |
 | T-10 | **A user, a load and a truck persist with intact foreign keys** (issue #6 Minimum Integration Test) | backend (db) | Rows stored, `owner_id` and `transporter_id` read back correctly | As expected | ✅ Pass | #6 |
@@ -33,11 +33,20 @@ the row says so rather than carrying a placeholder.
 | T-20 | The seed script populates all 9 seedable tables with a complete demo journey (one accepted match, receipt, 3 tracking events, 2 ratings, 1 dispute, 1 compliance document) | db (docker) | Row counts: users 3, loads 2, trucks 2, matches 1, receipts 1, tracking_events 3, ratings 2, disputes 1, compliance_documents 1 | As expected | ✅ Pass | #7 |
 | T-21 | Seeded password hashes are genuine, verifiable bcrypt (`pgcrypto`'s `crypt()`/`gen_salt('bf')`), not placeholders | db (docker) | `password_hash = crypt('TampDemo2026!', password_hash)` is `true` for all 3 demo accounts | As expected | ✅ Pass | #7 |
 | T-22 | **The application starts against the dockerized local DB using only the `DB_URL`/`DB_USERNAME`/`DB_PASSWORD` config flags, and a basic read/write against it succeeds** (issue #7 Minimum Integration Test) | backend + db (docker) | App boots, Hibernate schema validation passes, `/health` returns 200; a direct `INSERT`/`SELECT`/`DELETE` against the same live database succeeds while the app remains connected | As expected | ✅ Pass | #7 |
-| T-23 | Rule engine rejects each disqualifying condition independently: capacity, cargo/vehicle incompatibility, non-overlapping availability, different city (4 tests), accepts and explains a valid match, and ranks by capacity headroom | matching-service | Each disqualified case returns no match; the valid case returns all 4 reasons; two eligible trucks are ordered by headroom, not tied | As expected | ✅ Pass | #13 |
-| T-24 | `POST /match` correctly serialises the rule engine's decision to and from HTTP, including the empty-result case | matching-service | 200 with the eligible truck and its reasons; 200 with an empty list when nothing qualifies | As expected | ✅ Pass | #13 |
-| T-25 | `MatchingServiceClient.requestMatches(...)` sends snake_case field names matching-service expects and parses the response | backend | Request body contains `origin_city`, `weight_kg`, `vehicle_type`; response parses to `truckId`, `score`, `reasons` | As expected | ✅ Pass | #13 |
-| T-26 | `MatchingCoordinator` fetches the load and available trucks, persists every eligible match, and writes an audit event naming the actor, the load, and the match count, including when zero trucks are eligible | backend | 1 match persisted and 1 audit event with `matchCount: 1`; on the zero-match path, 0 matches persisted and 1 audit event with `matchCount: 0` | As expected | ✅ Pass | #13 |
-| T-27 | **Real HTTP call from the orchestrator to matching-service returns the correct match within 2 seconds on #7's seeded data** (replaces T-05–T-07's dummy round trip; issue #13's required performance evidence) | both (e2e) | The seeded open load matches exactly the one eligible seeded truck, with real reasons, in under 2000ms | 706ms, eligible truck found | ✅ Pass | #13 |
+| T-23 | **Clean clone → `docker compose up --build -d` → `/health` on both backend and matching-service return 200** (issue #8 Minimum Integration Test) | backend + matching-service + db (docker) | All 3 containers `Up` (db `Healthy`); `curl :8080/health` and `curl :8000/health` both 200 | As expected, after one fix (see below) | ✅ Pass | #8 |
+| T-24 | matching-service's generated API docs page loads after `docker compose up` | matching-service (docker) | `curl :8000/docs` → 200 | As expected | ✅ Pass | #8 |
+| T-25 | orchestrator's Swagger UI loads after `docker compose up` | backend (docker) | 200 | 200, confirmed once #10's and #13's independent `springdoc-openapi` additions were merged into one dependency | ✅ Pass | #8 |
+| T-26 | `PasswordEncoder` hashes rather than passing input through unchanged, and salts each call differently (2 tests) | backend | Encoded value never equals raw input; two encodings of the same input differ | As expected | ✅ Pass | #10 |
+| T-27 | `CreateUserRequest` bean validation rejects a blank name and a malformed email, and accepts a well-formed request (3 tests) | backend | Violations reported on the right field; a valid request produces none | As expected | ✅ Pass | #10 |
+| T-28 | **A user is created via `POST /users`, then fetched via `GET /users/{id}` and the data matches** (issue #10 Minimum Integration Test) | backend | 201 with `complianceStatus: PENDING`; subsequent GET returns the same `fullName`/`email`; stored `password_hash` is never the raw password | As expected | ✅ Pass | #10 |
+| T-29 | `GET /users/{id}` for an id with no matching row | backend | 404, not an unhandled 500 | As expected | ✅ Pass | #10 |
+| T-30 | `PATCH /users/{id}` with only `complianceStatus` set leaves `fullName` unchanged | backend | 200, `complianceStatus` updated, `fullName` untouched | As expected | ✅ Pass | #10 |
+| T-31 | `POST /users` with an email differing only in case from an existing user | backend | 409, not the raw `DataIntegrityViolationException` | As expected | ✅ Pass | #10 |
+| T-32 | Rule engine rejects each disqualifying condition independently: capacity, cargo/vehicle incompatibility, non-overlapping availability, different city (4 tests), accepts and explains a valid match, and ranks by capacity headroom | matching-service | Each disqualified case returns no match; the valid case returns all 4 reasons; two eligible trucks are ordered by headroom, not tied | As expected | ✅ Pass | #13 |
+| T-33 | `POST /match` correctly serialises the rule engine's decision to and from HTTP, including the empty-result case | matching-service | 200 with the eligible truck and its reasons; 200 with an empty list when nothing qualifies | As expected | ✅ Pass | #13 |
+| T-34 | `MatchingServiceClient.requestMatches(...)` sends snake_case field names matching-service expects and parses the response | backend | Request body contains `origin_city`, `weight_kg`, `vehicle_type`; response parses to `truckId`, `score`, `reasons` | As expected | ✅ Pass | #13 |
+| T-35 | `MatchingCoordinator` fetches the load and available trucks, persists every eligible match, and writes an audit event naming the actor, the load, and the match count, including when zero trucks are eligible | backend | 1 match persisted and 1 audit event with `matchCount: 1`; on the zero-match path, 0 matches persisted and 1 audit event with `matchCount: 0` | As expected | ✅ Pass | #13 |
+| T-36 | **Real HTTP call from the orchestrator to matching-service returns the correct match within 2 seconds on #7's seeded data** (replaces T-05–T-07's dummy round trip; issue #13's required performance evidence) | both (e2e) | The seeded open load matches exactly the one eligible seeded truck, with real reasons, in under 2000ms | 706ms, eligible truck found | ✅ Pass | #13 |
 
 ### Evidence for T-19–T-22
 
@@ -96,6 +105,58 @@ app boot and the direct database check were run concurrently against the *same* 
 container, which is what proves the config-flag connection and the read/write both hold
 at once, rather than proving two unrelated things.
 
+### Evidence for T-23–T-24
+
+Run from a genuinely clean state, existing images removed first, to prove the documented
+commands work from a fresh clone rather than only against an already-built cache:
+
+```
+$ docker rmi truck-matching-backend truck-matching-matching-service truck-matching-db
+$ cp .env.example .env
+$ docker compose up --build -d
+ Container truck-matching-db-1 Healthy
+ Container truck-matching-backend-1 Started
+ Container truck-matching-matching-service-1 Started
+
+$ curl http://localhost:8080/health
+{"status":"UP","service":"backend"} [HTTP 200]
+
+$ curl http://localhost:8000/health
+{"status":"UP","service":"matching-service"} [HTTP 200]
+
+$ curl -o /dev/null -w "%{http_code}\n" http://localhost:8000/docs
+200
+```
+
+One real defect was caught and fixed by this run, not by inspection: the first attempt
+had `matching-service` build successfully but crash on start with `Could not import
+module "matching_service.main"`. A plain (non-editable) `pip install .` copies whatever
+is in `src/` into site-packages at that point in the build, and at that point only an
+empty stub package existed (written to satisfy the build backend's package discovery
+before the real source is copied in a later layer). The later `COPY src ./src` updated
+the build context but not the already-installed copy. Fixed by switching to
+`pip install -e .` (editable install), which references `./src` instead of copying it,
+so the later `COPY` is what Python actually imports. See `matching-service/Dockerfile`.
+
+A second pass (`/simplify`) changed both services' port bindings from all-interfaces
+(`"8080:8080"`) to loopback-only (`"127.0.0.1:8080:8080"`), matching `db`'s own existing
+convention. T-23 was re-run after that change to confirm it didn't silently break the
+smoke test:
+
+```
+$ docker compose up -d
+$ curl http://localhost:8080/health
+{"status":"UP","service":"backend"} [HTTP 200]
+$ curl http://localhost:8000/health
+{"status":"UP","service":"matching-service"} [HTTP 200]
+```
+
+The first retry returned `HTTP 000` (connection refused) after only a 2-second wait —
+not a regression from the binding change, Spring Boot's own startup time, confirmed by
+retrying after 15 seconds and getting 200. Loopback and all-interfaces bindings both
+resolve `localhost` identically from the same machine; only reachability from other
+machines on the network differs, which nothing here tests or needs.
+
 ### A near-miss caught before commit, not after
 
 An earlier version of `docker-compose.yml` bind-mounted `db/migrations` directly as
@@ -152,8 +213,8 @@ executable lines a test run touched at least once.
 
 | Service | Tool | Line coverage | Gate | Status |
 |---|---|---|---|---|
-| backend | JaCoCo 0.8.12 | **92.6%** (249/269 lines) | 80% | ✅ Pass |
-| matching-service | pytest-cov | **100%** (83/83 lines) | 80% | ✅ Pass |
+| backend | JaCoCo 0.8.12 | **91.2%** (936/1026 lines) | 80% | ✅ Pass |
+| matching-service | pytest-cov | **100%** (165/165 lines) | 80% | ✅ Pass |
 
 Reports are uploaded as CI artifacts (`coverage-backend`, `coverage-matching-service`)
 on every run, including failures — the number matters most when the gate trips.
@@ -185,6 +246,13 @@ test. A `MockMvc`-based controller test would close this; not written here becau
 coordinator (where the actual logic lives) is already fully covered and the controller
 method is a two-line pass-through. All figures here are taken from the JaCoCo CSV directly,
 not estimated.
+
+It is now **91.2% (936/1026)**, remeasured after merging #10's user/profile work
+(`UserController`, `CreateUserRequest`, `UpdateUserRequest`, `UserResponse`,
+`PasswordEncoderConfig`, `UserNotFoundException`) and #8's Dockerfiles into #13's branch.
+The percentage moved because the two feature sets landed independently and the bundle
+measured here is neither one alone; `mvn clean verify` was rerun against the merged tree
+rather than assuming the two issues' figures would simply add up.
 
 ## Known defects
 
@@ -243,9 +311,9 @@ pytest
 
 The 80% threshold lives in `pyproject.toml`, so a local run gates exactly as CI does.
 
-### The cross-service end-to-end test (T-27)
+### The cross-service end-to-end test (T-36)
 
-T-27 needs **both** services running, plus a Docker daemon for its own Testcontainers
+T-36 needs **both** services running, plus a Docker daemon for its own Testcontainers
 Postgres, so it is tagged `e2e` and excluded from the default Maven run. Without that
 exclusion the `backend (Java)` CI job would depend on a live Python process, destroying
 the per-service independence that #2 exists to provide: a backend failure would no
